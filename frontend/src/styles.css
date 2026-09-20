@@ -393,16 +393,16 @@ select:focus-visible,
 .empty-workspace {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   min-height: 100%;
-  padding: 42px 40px;
-  text-align: left;
+  padding: 42px 28px;
+  text-align: center;
 }
 
 .storage-flow-art {
-  width: min(100%, 660px);
-  margin: 0 0 32px;
+  width: min(100%, 600px);
+  margin: 0 0 28px;
   align-self: center;
   filter: drop-shadow(0 8px 14px rgba(11, 43, 80, 0.04));
 }
@@ -414,76 +414,79 @@ select:focus-visible,
 }
 
 .profile-frame {
-  fill: rgba(255, 255, 255, 0.54);
-  stroke: #c6d5e2;
-  stroke-width: 1.2;
+  fill: rgba(255, 255, 255, 0.68);
+  stroke: #c5d6e2;
+  stroke-width: 0.8;
 }
 
 .surplus-panel .profile-frame {
-  stroke: #80b9d1;
+  stroke: #b5d3e0;
 }
 
 .storage-panel .profile-frame {
-  stroke: #75c6bd;
+  stroke: #a9d4d1;
 }
 
 .deficit-panel .profile-frame {
-  stroke: #efb381;
+  stroke: #e5ceba;
 }
 
 .demand-line {
   fill: none;
-  stroke: #111827;
+  stroke: #64748b;
   stroke-linecap: round;
-  stroke-width: 1.8;
+  stroke-width: 1;
 }
 
 .supply-wave {
   fill: none;
   stroke: var(--navy);
   stroke-linecap: round;
-  stroke-width: 2.2;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
 }
 
-.surplus-panel .supply-wave {
-  animation: surplus-wave-cycle 6s ease-in-out infinite;
+.surplus-profile {
+  transform-box: view-box;
+  transform-origin: 50px 39px;
+  animation: surplus-wave-cycle 8s ease-in-out infinite;
 }
 
-.deficit-panel .supply-wave {
-  animation: deficit-wave-cycle 6s ease-in-out infinite;
+.deficit-profile {
+  transform-box: view-box;
+  transform-origin: 306px 23px;
+  animation: deficit-wave-cycle 8s ease-in-out infinite;
 }
 
 .surplus-area {
-  fill: rgba(35, 124, 165, 0.38);
-  animation: surplus-area-cycle 6s ease-in-out infinite;
+  fill: rgba(45, 137, 171, 0.23);
 }
 
 .deficit-area {
-  fill: rgba(231, 120, 40, 0.38);
-  animation: deficit-area-cycle 6s ease-in-out infinite;
+  fill: rgba(205, 134, 74, 0.23);
 }
 
 .flow-arrow {
   fill: none;
   stroke-linecap: round;
-  stroke-width: 2;
-  stroke-dasharray: 4 4;
+  stroke-linejoin: round;
+  stroke-width: 1.3;
 }
 
 .flow-arrow-charge {
   stroke: #237ca5;
-  animation: charge-phase 6s ease-in-out infinite, energy-flow 0.75s linear infinite;
+  animation: charge-phase 8s ease-in-out infinite;
 }
 
 .flow-arrow-discharge {
-  stroke: #e77828;
-  animation: discharge-phase 6s ease-in-out infinite, energy-flow 0.75s linear infinite;
+  stroke: #bc793e;
+  animation: discharge-phase 8s ease-in-out infinite;
 }
 
 .flow-battery .battery-shell {
-  fill: #ffffff;
+  fill: rgba(255, 255, 255, 0.65);
   stroke: var(--navy);
-  stroke-width: 2;
+  stroke-width: 1.4;
 }
 
 .flow-battery .battery-terminal {
@@ -491,7 +494,7 @@ select:focus-visible,
   stroke: var(--navy);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2;
+  stroke-width: 1.4;
 }
 
 .flow-battery .flow-battery-level {
@@ -499,71 +502,56 @@ select:focus-visible,
   stroke: none;
   transform-box: fill-box;
   transform-origin: left center;
-  animation: battery-cycle 6s ease-in-out infinite;
+  animation: battery-cycle 8s ease-in-out infinite;
 }
 
 .flow-battery .flow-bolt {
   fill: var(--navy);
   stroke: #ffffff;
-  stroke-width: 0.7;
+  stroke-width: 0.4;
 }
 
 .storage-flow-art text {
   fill: #5a7188;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 8px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-anchor: middle;
 }
 
-@keyframes energy-flow {
-  to { stroke-dashoffset: -16; }
-}
-
 @keyframes surplus-wave-cycle {
-  0%, 5%, 100% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33"); }
-  45%, 52% { d: path("M12 33C24 33 26 23 50 23C74 23 76 33 88 33"); }
-  94% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33"); }
-}
-
-@keyframes surplus-area-cycle {
-  0%, 5%, 100% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33H12Z"); opacity: 0.8; }
-  45%, 52% { d: path("M12 33C24 33 26 23 50 23C74 23 76 33 88 33H12Z"); opacity: 0.38; }
-  94% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33H12Z"); opacity: 0.18; }
+  0%, 6%, 100% { transform: scaleY(1); }
+  44%, 94% { transform: scaleY(0.5); }
 }
 
 @keyframes deficit-wave-cycle {
-  0%, 50%, 100% { d: path("M268 29C280 29 282 49 306 49C330 49 332 29 344 29"); }
-  94% { d: path("M268 29C280 29 282 39 306 39C330 39 332 29 344 29"); }
-}
-
-@keyframes deficit-area-cycle {
-  0%, 50%, 100% { d: path("M268 29C280 29 282 49 306 49C330 49 332 29 344 29H268Z"); opacity: 0.18; }
-  58% { opacity: 0.8; }
-  94% { d: path("M268 29C280 29 282 39 306 39C330 39 332 29 344 29H268Z"); opacity: 0.38; }
+  0%, 52%, 100% { transform: scaleY(1); }
+  90%, 94% { transform: scaleY(0.5); }
 }
 
 @keyframes charge-phase {
-  0%, 5%, 48%, 100% { opacity: 0.12; }
-  12%, 40% { opacity: 1; }
+  0%, 48%, 100% { opacity: 0.25; }
+  6%, 40% { opacity: 1; }
 }
 
 @keyframes discharge-phase {
-  0%, 50%, 96%, 100% { opacity: 0.12; }
-  58%, 90% { opacity: 1; }
+  0%, 48%, 96%, 100% { opacity: 0.25; }
+  54%, 86% { opacity: 1; }
 }
 
 @keyframes battery-cycle {
-  0%, 5%, 100% { transform: scaleX(0.12); }
-  45%, 52% { transform: scaleX(1); }
-  94% { transform: scaleX(0.12); }
+  0%, 6%, 100% { transform: scaleX(0.08); }
+  44%, 52% { transform: scaleX(1); }
+  90%, 94% { transform: scaleX(0.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .surplus-area,
   .deficit-area,
   .supply-wave,
+  .surplus-profile,
+  .deficit-profile,
   .flow-arrow,
   .flow-battery .flow-battery-level {
     animation: none;
@@ -575,6 +563,7 @@ select:focus-visible,
 }
 
 .empty-workspace h2 {
+  max-width: 100%;
   margin: 0 0 20px;
   color: var(--navy);
   font-size: clamp(28px, 2.6vw, 42px);
@@ -591,18 +580,8 @@ select:focus-visible,
   font-weight: 500;
 }
 
-.empty-workspace > p {
-  max-width: 720px;
-  margin: 26px 0;
-  padding-top: 24px;
-  border-top: 1px solid var(--line);
-  color: var(--slate);
-  font-size: 14px;
-  line-height: 1.55;
-}
-
 .empty-workspace h3 {
-  margin: 0 0 20px;
+  margin: 36px 0 22px;
   font-size: 17px;
 }
 
@@ -610,7 +589,7 @@ select:focus-visible,
   display: grid;
   grid-template-columns: repeat(5, minmax(92px, 1fr));
   gap: 18px;
-  width: min(820px, 100%);
+  width: min(1000px, 100%);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -620,7 +599,7 @@ select:focus-visible,
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 11px;
   min-height: 76px;
   padding: 0;
@@ -630,7 +609,7 @@ select:focus-visible,
 .method-sequence li:not(:last-child)::after {
   position: absolute;
   top: 16px;
-  left: 42px;
+  left: calc(50% + 24px);
   width: calc(100% - 34px);
   border-top: 1px solid var(--line);
   content: "";
@@ -659,16 +638,19 @@ select:focus-visible,
   display: flex;
   align-items: center;
   gap: 12px;
-  width: min(720px, 100%);
+  width: 100%;
+  justify-content: center;
   margin-top: 32px;
   padding: 20px 0 0;
   border-top: 1px solid var(--line);
   color: var(--slate);
-  text-align: left;
+  text-align: center;
   font-size: 13px;
 }
 
-.empty-note svg { flex: 0 0 auto; }
+/* Let short explanations use the pane's full width before wrapping. */
+.empty-note span { min-width: 0; }
+.empty-workspace h2, .method-lock { text-wrap: balance; }
 
 .loading-state {
   display: flex;
@@ -1195,6 +1177,8 @@ td b {
   }
 
   .method-sequence li::after { display: none; }
+  .method-sequence li:last-child { grid-column: 1 / -1; }
+  .empty-note span { text-wrap: balance; }
   .storage-flow-art { margin-bottom: 20px; }
 
   .results-workspace {
@@ -1253,6 +1237,13 @@ td b {
     animation-iteration-count: 1 !important;
     transition: none !important;
   }
+}
+
+@media (min-width: 1200px) and (max-height: 960px) {
+  .app-shell { grid-template-rows: 80px minmax(0, 1fr) 48px; }
+  .rail-section { padding-block: 22px; }
+  .number-row { min-height: 48px; }
+  .upload-box { min-height: 94px; padding-block: 14px; }
 }
 
 @supports not (backdrop-filter: blur(1px)) {
