@@ -188,7 +188,7 @@ function ResultsWorkspace({ result }: { result: RunResult }) {
     const match = disposition.match(/filename="([^"]+)"/);
     const anchor = document.createElement("a");
     anchor.href = URL.createObjectURL(blob);
-    anchor.download = match?.[1] ?? "storage_optimisation_results.xlsx";
+    anchor.download = match?.[1] ?? "storage_dispatch_optimiser_results.xlsx";
     anchor.click();
     URL.revokeObjectURL(anchor.href);
   };
@@ -397,7 +397,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <h1>Storage Floor-Lifting Optimiser</h1>
+          <h1>Storage Dispatch Optimiser</h1>
           <span>Progressive leximin · v2</span>
         </div>
         <div className="local-status"><span /> Runs locally</div>

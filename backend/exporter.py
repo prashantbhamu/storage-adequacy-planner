@@ -44,7 +44,7 @@ def _style_summary_sheet(
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A4"
     sheet.merge_cells("A1:F1")
-    sheet["A1"] = "Storage Optimisation v2 — Leximin"
+    sheet["A1"] = "Storage Dispatch Optimiser v2 — Leximin"
     sheet["A1"].font = Font(name="Aptos Display", size=20, bold=True, color=WHITE)
     sheet["A1"].fill = PatternFill("solid", fgColor=NAVY)
     sheet["A1"].alignment = Alignment(vertical="center")
@@ -293,7 +293,7 @@ def build_results_workbook(
     result: OptimizationResult,
 ) -> bytes:
     workbook = Workbook()
-    workbook.properties.title = "Storage Optimisation v2 — Progressive Leximin"
+    workbook.properties.title = "Storage Dispatch Optimiser v2 — Progressive Leximin"
     workbook.properties.description = (
         "; ".join(METHOD_OBJECTIVES)
         + ". Solar is optional reference-only; blank means not supplied. "

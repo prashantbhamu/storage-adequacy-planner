@@ -1,9 +1,9 @@
-# Storage Floor-Lifting Optimiser
+# Storage Dispatch Optimiser
 
 A local, open-source decision-support tool for exploring how a single combined
 storage resource can reshape an hourly supply–demand residual profile.
 
-![Storage optimiser interface](docs/interface.png)
+![Storage Dispatch Optimiser interface](docs/interface.png)
 
 ## What it does
 

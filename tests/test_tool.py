@@ -151,7 +151,7 @@ def test_xlsx_api_workflow_and_download() -> None:
 
     download = client.get(f"/api/download/{result['run_id']}")
     assert download.status_code == 200
-    assert "storage_optimisation_v2_" in download.headers["content-disposition"]
+    assert "storage_dispatch_optimiser_v2_" in download.headers["content-disposition"]
     workbook = load_workbook(io.BytesIO(download.content), read_only=True)
     assert workbook.sheetnames == ["Summary", "Hourly Results"]
     assert workbook["Hourly Results"].max_row == 673

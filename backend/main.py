@@ -19,7 +19,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = APP_ROOT / "frontend" / "dist"
 MAX_STORED_EXPORTS = 5
 
-app = FastAPI(title="Storage Floor-Lifting Optimiser v2", version=VERSION)
+app = FastAPI(title="Storage Dispatch Optimiser v2", version=VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -153,7 +153,7 @@ async def optimize(
         )
         run_id = uuid.uuid4().hex
         export = build_results_workbook(validated, spec, result)
-        filename = f"storage_optimisation_v2_{validated.period_label.replace(' ', '_')}.xlsx"
+        filename = f"storage_dispatch_optimiser_v2_{validated.period_label.replace(' ', '_')}.xlsx"
         _exports[run_id] = (filename, export)
         while len(_exports) > MAX_STORED_EXPORTS:
             _exports.popitem(last=False)
