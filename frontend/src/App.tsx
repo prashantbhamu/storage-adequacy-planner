@@ -456,6 +456,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-brand">
+          <span className="brand-symbol" aria-hidden="true"><BatteryCharging size={22} strokeWidth={1.6} /></span>
           <h1>Storage Dispatch Optimiser</h1>
         </div>
       </header>
