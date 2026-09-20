@@ -88,34 +88,6 @@ select:focus-visible,
   letter-spacing: -0.025em;
 }
 
-.topbar-brand > span {
-  color: var(--slate);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
-
-.local-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 38px;
-  padding: 0 14px;
-  border: 1px solid #9ed7d1;
-  border-radius: 999px;
-  color: var(--navy);
-  background: #fbfefe;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.local-status span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
 .main-layout {
   display: grid;
   grid-template-columns: 420px minmax(0, 1fr);
@@ -981,19 +953,8 @@ td b {
   }
 
   .topbar h1 {
-    max-width: 72%;
     font-size: 20px;
     line-height: 1.05;
-  }
-
-  .topbar-brand > span {
-    display: none;
-  }
-
-  .local-status {
-    min-height: 32px;
-    padding: 0 10px;
-    font-size: 11px;
   }
 
   .main-layout {

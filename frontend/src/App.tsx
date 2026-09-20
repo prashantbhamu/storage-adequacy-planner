@@ -30,11 +30,11 @@ const EMPTY_STORAGE: StorageInputs = {
 };
 
 const METHOD_STEPS = [
-  "Lift floor",
-  "Reduce shortage",
-  "Preserve SOC",
-  "Level remaining gaps",
-  "Minimise cycling",
+  "Charge in surplus hours",
+  "Discharge in tight hours",
+  "Reduce shortages",
+  "Smooth supply and demand",
+  "Avoid extra cycling",
 ];
 
 const STORAGE_FIELDS: Array<[
@@ -117,13 +117,13 @@ function EmptyWorkspace() {
   return (
     <section className="empty-workspace">
       <div className="empty-symbol"><BarChart3 size={48} strokeWidth={1.7} /></div>
-      <h2>Progressive floor lifting · Leximin v2</h2>
-      <div className="method-lock">48 h look-ahead · 24 h commitment · continuous SOC</div>
+      <h2>Plan when storage should charge and discharge to balance supply and demand.</h2>
+      <div className="method-lock">Looks 48 hours ahead · updates every 24 hours · tracks stored energy continuously</div>
       <p>
-        Raise the lowest feasible residual gaps progressively, drawing energy from
-        higher-surplus hours. A blocked hour does not stop later improvements.
+        The tool stores power when supply is plentiful and releases it when supply is tight,
+        reducing shortages and smoothing the supply–demand balance.
       </p>
-      <h3>Methodology sequence</h3>
+      <h3>How it works</h3>
       <ol className="method-sequence">
         {METHOD_STEPS.map((step, index) => (
           <li key={step}>
@@ -134,7 +134,7 @@ function EmptyWorkspace() {
       </ol>
       <div className="empty-note">
         <Info size={20} />
-        <span>Upload Timestamp, Demand (GW) and Available Supply (GW), then enter storage assumptions to begin.</span>
+        <span>Upload hourly Timestamp, Demand (GW) and Available Supply (GW) for a full month or financial year, then enter storage power (GW), capacity (GWh), efficiency (%) and daily cycle limit.</span>
       </div>
     </section>
   );
@@ -298,7 +298,7 @@ function ResultsWorkspace({ result }: { result: RunResult }) {
         </section>
       </div>
 
-      <div className="method-footer">Leximin v2 · 48 h look-ahead · 24 h commitment · continuous SOC</div>
+      <div className="method-footer">Looks 48 hours ahead · updates every 24 hours · tracks stored energy continuously</div>
     </section>
   );
 }
@@ -398,9 +398,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-brand">
           <h1>Storage Dispatch Optimiser</h1>
-          <span>Progressive leximin · v2</span>
         </div>
-        <div className="local-status"><span /> Runs locally</div>
       </header>
 
       <div className="main-layout">
