@@ -117,14 +117,17 @@ function StorageFlowGraphic() {
     <div
       className="storage-flow-art"
       role="img"
-      aria-label="Storage charges from surplus hours and discharges during tight-supply hours"
+      aria-label="A supply wave rises above demand to charge the battery, then the battery discharges when supply falls below demand"
     >
-      <svg viewBox="0 0 236 92" aria-hidden="true">
+      <svg viewBox="0 0 356 88" aria-hidden="true">
         <defs>
           <linearGradient id="stored-energy" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0%" stopColor="#078c82" />
             <stop offset="100%" stopColor="#63c5bd" />
           </linearGradient>
+          <clipPath id="battery-window">
+            <rect x="157" y="22" width="42" height="24" rx="4" />
+          </clipPath>
           <marker id="charge-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
             <path d="M0 0L7 3.5L0 7Z" fill="#237ca5" />
           </marker>
@@ -133,32 +136,37 @@ function StorageFlowGraphic() {
           </marker>
         </defs>
 
-        <g className="flow-node flow-node-charge">
-          <rect x="4" y="8" width="54" height="54" rx="16" />
-          <path d="M16 45V37M26 45V29M36 45V19M46 45V25" />
-          <path d="M14 49H48" />
+        <g className="profile-panel surplus-panel">
+          <rect className="profile-frame" x="2" y="4" width="96" height="54" rx="13" />
+          <path className="profile-area surplus-area" d="M12 33C24 33 26 13 50 13C74 13 76 33 88 33H12Z" />
+          <path className="supply-wave" d="M12 33C24 33 26 13 50 13C74 13 76 33 88 33" />
+          <path className="demand-line" d="M11 33H89" />
         </g>
 
-        <path className="flow-arrow flow-arrow-charge" d="M62 29C75 18 86 18 98 27" markerEnd="url(#charge-arrow)" />
+        <path className="flow-arrow flow-arrow-charge" d="M102 25C112 17 120 17 128 24" markerEnd="url(#charge-arrow)" />
 
-        <g className="flow-battery">
-          <rect x="99" y="16" width="39" height="43" rx="8" />
-          <path d="M138 31H143V44H138" />
-          <path className="flow-battery-level" d="M105 40H132V53H105Z" />
-          <path className="flow-bolt" d="M121 24L112 38H119L116 48L127 33H120Z" />
+        <g className="flow-battery storage-panel">
+          <rect className="profile-frame" x="130" y="4" width="96" height="54" rx="13" />
+          <rect className="battery-shell" x="151" y="16" width="50" height="36" rx="7" />
+          <path className="battery-terminal" d="M201 27H207V41H201" />
+          <g clipPath="url(#battery-window)">
+            <rect className="flow-battery-level" x="157" y="22" width="42" height="24" rx="4" />
+          </g>
+          <path className="flow-bolt" d="M180 20L169 34H176L172 47L187 31H179Z" />
         </g>
 
-        <path className="flow-arrow flow-arrow-discharge" d="M143 47C156 58 168 58 179 49" markerEnd="url(#discharge-arrow)" />
+        <path className="flow-arrow flow-arrow-discharge" d="M228 38C238 47 246 47 254 39" markerEnd="url(#discharge-arrow)" />
 
-        <g className="flow-node flow-node-discharge">
-          <rect x="178" y="8" width="54" height="54" rx="16" />
-          <path d="M190 44V35M200 44V39M210 44V29M220 44V33" />
-          <path d="M188 48H222" />
+        <g className="profile-panel deficit-panel">
+          <rect className="profile-frame" x="258" y="4" width="96" height="54" rx="13" />
+          <path className="profile-area deficit-area" d="M268 29C280 29 282 49 306 49C330 49 332 29 344 29H268Z" />
+          <path className="supply-wave" d="M268 29C280 29 282 49 306 49C330 49 332 29 344 29" />
+          <path className="demand-line" d="M267 29H345" />
         </g>
 
-        <text x="31" y="82">SURPLUS</text>
-        <text x="119" y="82">STORAGE</text>
-        <text x="205" y="82">LOW SUPPLY</text>
+        <text x="50" y="77">SURPLUS HOURS</text>
+        <text x="178" y="77">STORAGE</text>
+        <text x="306" y="77">DEFICIT HOURS</text>
       </svg>
     </div>
   );

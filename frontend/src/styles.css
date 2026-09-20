@@ -377,8 +377,8 @@ select:focus-visible,
 }
 
 .storage-flow-art {
-  width: min(236px, 72vw);
-  margin-bottom: 22px;
+  width: min(356px, 86vw);
+  margin-bottom: 20px;
   filter: drop-shadow(0 8px 14px rgba(11, 43, 80, 0.08));
 }
 
@@ -388,32 +388,54 @@ select:focus-visible,
   overflow: visible;
 }
 
-.flow-node rect {
-  fill: rgba(255, 255, 255, 0.94);
-  stroke-width: 1.5;
+.profile-frame {
+  fill: rgba(255, 255, 255, 0.96);
+  stroke: #c6d5e2;
+  stroke-width: 1.2;
 }
 
-.flow-node path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.5;
-}
-
-.flow-node-charge rect {
+.surplus-panel .profile-frame {
   stroke: #80b9d1;
 }
 
-.flow-node-charge path {
-  stroke: #237ca5;
+.storage-panel .profile-frame {
+  stroke: #75c6bd;
 }
 
-.flow-node-discharge rect {
+.deficit-panel .profile-frame {
   stroke: #efb381;
 }
 
-.flow-node-discharge path {
-  stroke: #d9671f;
+.demand-line {
+  fill: none;
+  stroke: #111827;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.supply-wave {
+  fill: none;
+  stroke: var(--navy);
+  stroke-linecap: round;
+  stroke-width: 2.2;
+}
+
+.surplus-panel .supply-wave {
+  animation: surplus-wave-cycle 6s ease-in-out infinite;
+}
+
+.deficit-panel .supply-wave {
+  animation: deficit-wave-cycle 6s ease-in-out infinite;
+}
+
+.surplus-area {
+  fill: rgba(35, 124, 165, 0.38);
+  animation: surplus-area-cycle 6s ease-in-out infinite;
+}
+
+.deficit-area {
+  fill: rgba(231, 120, 40, 0.38);
+  animation: deficit-area-cycle 6s ease-in-out infinite;
 }
 
 .flow-arrow {
@@ -421,25 +443,25 @@ select:focus-visible,
   stroke-linecap: round;
   stroke-width: 2;
   stroke-dasharray: 4 4;
-  animation: energy-flow 1.6s linear infinite;
 }
 
 .flow-arrow-charge {
   stroke: #237ca5;
+  animation: charge-phase 6s ease-in-out infinite, energy-flow 0.75s linear infinite;
 }
 
 .flow-arrow-discharge {
   stroke: #e77828;
-  animation-delay: -0.8s;
+  animation: discharge-phase 6s ease-in-out infinite, energy-flow 0.75s linear infinite;
 }
 
-.flow-battery > rect {
+.flow-battery .battery-shell {
   fill: #ffffff;
   stroke: var(--navy);
   stroke-width: 2;
 }
 
-.flow-battery > path:nth-of-type(1) {
+.flow-battery .battery-terminal {
   fill: none;
   stroke: var(--navy);
   stroke-linecap: round;
@@ -450,11 +472,15 @@ select:focus-visible,
 .flow-battery .flow-battery-level {
   fill: url(#stored-energy);
   stroke: none;
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: battery-cycle 6s ease-in-out infinite;
 }
 
 .flow-battery .flow-bolt {
-  fill: #ffffff;
-  stroke: none;
+  fill: var(--navy);
+  stroke: #ffffff;
+  stroke-width: 0.7;
 }
 
 .storage-flow-art text {
@@ -470,8 +496,57 @@ select:focus-visible,
   to { stroke-dashoffset: -16; }
 }
 
+@keyframes surplus-wave-cycle {
+  0%, 5%, 100% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33"); }
+  45%, 52% { d: path("M12 33C24 33 26 23 50 23C74 23 76 33 88 33"); }
+  94% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33"); }
+}
+
+@keyframes surplus-area-cycle {
+  0%, 5%, 100% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33H12Z"); opacity: 0.8; }
+  45%, 52% { d: path("M12 33C24 33 26 23 50 23C74 23 76 33 88 33H12Z"); opacity: 0.38; }
+  94% { d: path("M12 33C24 33 26 13 50 13C74 13 76 33 88 33H12Z"); opacity: 0.18; }
+}
+
+@keyframes deficit-wave-cycle {
+  0%, 50%, 100% { d: path("M268 29C280 29 282 49 306 49C330 49 332 29 344 29"); }
+  94% { d: path("M268 29C280 29 282 39 306 39C330 39 332 29 344 29"); }
+}
+
+@keyframes deficit-area-cycle {
+  0%, 50%, 100% { d: path("M268 29C280 29 282 49 306 49C330 49 332 29 344 29H268Z"); opacity: 0.18; }
+  58% { opacity: 0.8; }
+  94% { d: path("M268 29C280 29 282 39 306 39C330 39 332 29 344 29H268Z"); opacity: 0.38; }
+}
+
+@keyframes charge-phase {
+  0%, 5%, 48%, 100% { opacity: 0.12; }
+  12%, 40% { opacity: 1; }
+}
+
+@keyframes discharge-phase {
+  0%, 50%, 96%, 100% { opacity: 0.12; }
+  58%, 90% { opacity: 1; }
+}
+
+@keyframes battery-cycle {
+  0%, 5%, 100% { transform: scaleX(0.12); }
+  45%, 52% { transform: scaleX(1); }
+  94% { transform: scaleX(0.12); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .flow-arrow { animation: none; }
+  .surplus-area,
+  .deficit-area,
+  .supply-wave,
+  .flow-arrow,
+  .flow-battery .flow-battery-level {
+    animation: none;
+  }
+
+  .flow-battery .flow-battery-level {
+    transform: scaleX(0.62);
+  }
 }
 
 .empty-workspace h2 {
