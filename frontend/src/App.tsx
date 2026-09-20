@@ -1,6 +1,5 @@
 import {
   ArrowDownToLine,
-  BarChart3,
   BatteryCharging,
   Check,
   ChevronLeft,
@@ -113,10 +112,62 @@ function ValidationRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function StorageFlowGraphic() {
+  return (
+    <div
+      className="storage-flow-art"
+      role="img"
+      aria-label="Storage charges from surplus hours and discharges during tight-supply hours"
+    >
+      <svg viewBox="0 0 236 92" aria-hidden="true">
+        <defs>
+          <linearGradient id="stored-energy" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#078c82" />
+            <stop offset="100%" stopColor="#63c5bd" />
+          </linearGradient>
+          <marker id="charge-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0 0L7 3.5L0 7Z" fill="#237ca5" />
+          </marker>
+          <marker id="discharge-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0 0L7 3.5L0 7Z" fill="#e77828" />
+          </marker>
+        </defs>
+
+        <g className="flow-node flow-node-charge">
+          <rect x="4" y="8" width="54" height="54" rx="16" />
+          <path d="M16 45V37M26 45V29M36 45V19M46 45V25" />
+          <path d="M14 49H48" />
+        </g>
+
+        <path className="flow-arrow flow-arrow-charge" d="M62 29C75 18 86 18 98 27" markerEnd="url(#charge-arrow)" />
+
+        <g className="flow-battery">
+          <rect x="99" y="16" width="39" height="43" rx="8" />
+          <path d="M138 31H143V44H138" />
+          <path className="flow-battery-level" d="M105 40H132V53H105Z" />
+          <path className="flow-bolt" d="M121 24L112 38H119L116 48L127 33H120Z" />
+        </g>
+
+        <path className="flow-arrow flow-arrow-discharge" d="M143 47C156 58 168 58 179 49" markerEnd="url(#discharge-arrow)" />
+
+        <g className="flow-node flow-node-discharge">
+          <rect x="178" y="8" width="54" height="54" rx="16" />
+          <path d="M190 44V35M200 44V39M210 44V29M220 44V33" />
+          <path d="M188 48H222" />
+        </g>
+
+        <text x="31" y="82">SURPLUS</text>
+        <text x="119" y="82">STORAGE</text>
+        <text x="205" y="82">LOW SUPPLY</text>
+      </svg>
+    </div>
+  );
+}
+
 function EmptyWorkspace() {
   return (
     <section className="empty-workspace">
-      <div className="empty-symbol"><BarChart3 size={48} strokeWidth={1.7} /></div>
+      <StorageFlowGraphic />
       <h2>Plan when storage should charge and discharge to balance supply and demand.</h2>
       <div className="method-lock">Looks 48 hours ahead · updates every 24 hours · tracks stored energy continuously</div>
       <p>

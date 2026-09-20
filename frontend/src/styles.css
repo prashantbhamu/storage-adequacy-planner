@@ -376,18 +376,102 @@ select:focus-visible,
   text-align: center;
 }
 
-.empty-symbol {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 78px;
-  height: 78px;
-  margin-bottom: 24px;
-  border: 1.5px dashed var(--teal);
-  border-radius: 22px;
-  color: var(--navy);
-  background: #ffffff;
-  box-shadow: var(--shadow-soft);
+.storage-flow-art {
+  width: min(236px, 72vw);
+  margin-bottom: 22px;
+  filter: drop-shadow(0 8px 14px rgba(11, 43, 80, 0.08));
+}
+
+.storage-flow-art svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.flow-node rect {
+  fill: rgba(255, 255, 255, 0.94);
+  stroke-width: 1.5;
+}
+
+.flow-node path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.flow-node-charge rect {
+  stroke: #80b9d1;
+}
+
+.flow-node-charge path {
+  stroke: #237ca5;
+}
+
+.flow-node-discharge rect {
+  stroke: #efb381;
+}
+
+.flow-node-discharge path {
+  stroke: #d9671f;
+}
+
+.flow-arrow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  animation: energy-flow 1.6s linear infinite;
+}
+
+.flow-arrow-charge {
+  stroke: #237ca5;
+}
+
+.flow-arrow-discharge {
+  stroke: #e77828;
+  animation-delay: -0.8s;
+}
+
+.flow-battery > rect {
+  fill: #ffffff;
+  stroke: var(--navy);
+  stroke-width: 2;
+}
+
+.flow-battery > path:nth-of-type(1) {
+  fill: none;
+  stroke: var(--navy);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.flow-battery .flow-battery-level {
+  fill: url(#stored-energy);
+  stroke: none;
+}
+
+.flow-battery .flow-bolt {
+  fill: #ffffff;
+  stroke: none;
+}
+
+.storage-flow-art text {
+  fill: #5a7188;
+  font-family: "Segoe UI", Aptos, sans-serif;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+}
+
+@keyframes energy-flow {
+  to { stroke-dashoffset: -16; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-arrow { animation: none; }
 }
 
 .empty-workspace h2 {
