@@ -1,9 +1,9 @@
-# Storage Dispatch Optimiser
+# Storage Adequacy Planner
 
 A local, open-source decision-support tool for exploring how a single combined
 storage resource can reshape an hourly supply–demand residual profile.
 
-![Storage Dispatch Optimiser interface](docs/interface.png)
+![Storage Adequacy Planner interface](docs/interface.png)
 
 ## What it does
 
@@ -80,11 +80,16 @@ Other columns (for example an old Solar column) are ignored.
 `final_soc_percent`, and optionally `min_soc_percent` (default 0),
 `max_soc_percent` (default 100) and `charge_from_surplus_only` (default true).
 
-Generate the included non-sensitive example:
+Two non-sensitive examples are included:
 
-```bash
-python examples/generate_synthetic_input.py
-```
+- `examples/synthetic_fy2029_30.csv` — a full synthetic financial year, loaded by
+  "Try with example data" in the app. It keeps only the month × hour average
+  shape and the size and persistence of variation of a private FY 2029-30
+  planning scenario; every hourly value is generated from a fixed seed, with
+  outliers clipped and the level scaled, so no source hour appears in it
+  (`examples/generate_synthetic_year.py`, which needs the private workbook).
+- `examples/synthetic_april_2031.csv` — a short synthetic month used by the
+  regression tests (`python examples/generate_synthetic_input.py`).
 
 ## Run locally
 

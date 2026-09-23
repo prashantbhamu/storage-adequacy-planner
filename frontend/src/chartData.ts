@@ -1,6 +1,7 @@
 import type { HourlyResult } from "./types";
 
 export type ResidualPoint = {
+  /** Position within the plotted day: 0 = first hour (06:00 on an accounting day). */
   hour: number;
   raw_gap_gw: number;
   residual_gap_gw: number;
@@ -18,10 +19,9 @@ function point(hour: number, before: number, after: number): ResidualPoint {
 
 export function residualPoints(rows: HourlyResult[]): ResidualPoint[] {
   const points: ResidualPoint[] = [];
-  rows.forEach((row, index) => {
-    const hour = Number(row.timestamp.slice(11, 13));
+  rows.forEach((row, hour) => {
     points.push(point(hour, row.raw_gap_gw, row.residual_gap_gw));
-    const next = rows[index + 1];
+    const next = rows[hour + 1];
     if (!next) return;
     const delta = row.residual_gap_gw - row.raw_gap_gw;
     const nextDelta = next.residual_gap_gw - next.raw_gap_gw;

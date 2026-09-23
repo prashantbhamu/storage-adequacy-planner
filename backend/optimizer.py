@@ -716,15 +716,18 @@ def _sensitivity(
     raw_gap: np.ndarray,
     spec: StorageSpec,
     base: dict,
+    report: Callable[[str, int, int], None],
 ) -> list[dict]:
     """Perfect-foresight change in floor and shortage for +10% of each limit."""
     rows = []
-    for field, label, unit in (
+    limits = (
         ("charge_power_gw", "Charge power", "GW"),
         ("discharge_power_gw", "Discharge power", "GW"),
         ("energy_gwh", "Energy capacity", "GWh"),
         ("max_cycles_per_accounting_day", "Daily cycle limit", "cycles"),
-    ):
+    )
+    for done, (field, label, unit) in enumerate(limits):
+        report("sensitivity", done, len(limits))
         value = getattr(spec, field)
         changed = replace(spec, **{field: value * (1.0 + SENSITIVITY_STEP)})
         try:
@@ -739,6 +742,7 @@ def _sensitivity(
             "floor_change_gw": _clean(plan["floor_gw"] - base["floor_gw"]),
             "shortage_change_gwh": _clean(plan["shortage_gwh"] - base["shortage_gwh"]),
         })
+    report("sensitivity", len(limits), len(limits))
     return rows
 
 
@@ -824,9 +828,14 @@ def optimize_storage(
     demand: Sequence[float],
     supply: Sequence[float],
     spec: StorageSpec,
-    progress: Callable[[int, int], None] | None = None,
+    progress: Callable[[str, int, int], None] | None = None,
     sensitivity: bool = True,
 ) -> OptimizationResult:
+    """Run the rolling-horizon dispatch.
+
+    ``progress(stage, done, total)`` is called with stage ``benchmark``,
+    ``horizons`` or ``sensitivity``.
+    """
     spec.validate()
     timestamps = list(timestamps)
     if not timestamps or len(timestamps) % COMMIT_HOURS != 0:
@@ -842,9 +851,13 @@ def optimize_storage(
     total = len(timestamps)
     day_caps = accounting_day_caps(timestamps, spec)
 
+    report = progress or (lambda stage, done, total: None)
+
     # The whole-period optimum is the benchmark and the rolling-horizon anchor:
     # each window's soft terminal target follows its SOC trajectory.
+    report("benchmark", 0, 1)
     plan = perfect_foresight(timestamps, raw_gap, spec)
+    report("benchmark", 1, 1)
 
     charge = np.zeros(total)
     discharge = np.zeros(total)
@@ -900,8 +913,7 @@ def optimize_storage(
                 "levels": solved["levels"],
             }
         )
-        if progress is not None:
-            progress(horizon_number, len(starts))
+        report("horizons", horizon_number, len(starts))
 
     (
         charge,
@@ -946,7 +958,9 @@ def optimize_storage(
     limits = _limiting_factors(
         timestamps, residual, discharge, soc_end, spec, daily_discharge, day_caps
     )
-    sensitivity_rows = _sensitivity(timestamps, raw_gap, spec, plan) if sensitivity else []
+    sensitivity_rows = (
+        _sensitivity(timestamps, raw_gap, spec, plan, report) if sensitivity else []
+    )
     limits["most_effective_increase"] = _most_effective_increase(sensitivity_rows)
     return OptimizationResult(
         timestamps=timestamps,
