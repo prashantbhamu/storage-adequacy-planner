@@ -160,7 +160,7 @@ export function Setup(props: {
                 <div><dt>Period</dt><dd>{props.validation.period_label}</dd></div>
                 <div><dt>Hours</dt><dd>{props.validation.row_count.toLocaleString("en-IN")}</dd></div>
                 <div><dt>Lowest gap</dt><dd className={props.validation.raw.minimum_gap_gw < 0 ? "negative" : ""}>{num(props.validation.raw.minimum_gap_gw)} GW</dd></div>
-                <div><dt>Shortage</dt><dd>{num(props.validation.raw.shortage_energy_gwh, 0)} GWh · {props.validation.raw.shortage_hours.toLocaleString("en-IN")} h</dd></div>
+                <div><dt>Shortage</dt><dd>{num(props.validation.raw.shortage_energy_gwh, 0)} GWh<small>{props.validation.raw.shortage_hours.toLocaleString("en-IN")} short hours</small></dd></div>
               </dl>
             ) : null}
             {props.validation ? <Sparkline days={props.validation.daily_minimum_gap_gw} /> : null}

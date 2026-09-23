@@ -1,16 +1,20 @@
 import { ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 import {
-  Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine,
+  Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { residualPoints } from "../chartData";
+import { levelPoints, residualPoints } from "../chartData";
 import { dayLabel, num, shortDay } from "../format";
 import { WINDOW_OPTIONS, clampStart, tightestDate, windowRows, type WindowDays } from "../timeWindow";
 import type { HourlyResult, RunResult } from "../types";
 
 const MARGIN = { top: 10, right: 18, left: 0, bottom: 0 };
 const MORPH_MS = 650;
+
+export type GapView = "levels" | "margin";
+
+type Scale = { domain: [number, number]; ticks: number[] };
 
 function useMedia(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -34,11 +38,16 @@ function useReducedMotion() {
   return reduced;
 }
 
-/** Round a scale limit outwards to a readable step. */
-function niceLimit(value: number, direction: 1 | -1) {
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(Math.abs(value), 1)));
-  const step = magnitude / 2;
-  return direction > 0 ? Math.ceil(value / step) * step : Math.floor(value / step) * step;
+/** A readable scale from ``low`` to ``high`` whose ticks always include zero. */
+function niceScale(low: number, high: number) {
+  const rough = Math.max(high - low, 1) / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= rough) ?? 10 * magnitude;
+  const start = Math.floor(low / step) * step;
+  const end = Math.ceil(high / step) * step;
+  const ticks: number[] = [];
+  for (let tick = start; tick <= end + step / 2; tick += step) ticks.push(Math.round(tick * 1e6) / 1e6);
+  return { domain: [start, end] as [number, number], ticks };
 }
 
 function tickLabel(row: HourlyResult | undefined, days: WindowDays) {
@@ -65,9 +74,14 @@ function HourTooltip({ active, label, rows, kind }: {
       <strong>{dayLabel(row.timestamp.slice(0, 10))} · {row.timestamp.slice(11, 16)}</strong>
       {kind === "gap" ? (
         <>
-          <div><span><i className="line-key is-before" />Before storage</span><b>{num(row.raw_gap_gw, 2)} GW</b></div>
-          <div><span><i className="line-key is-after" />After storage</span><b>{num(row.residual_gap_gw, 2)} GW</b></div>
-          <div className="tooltip-sub"><span>Demand · supply</span><b>{num(row.demand_gw, 1)} · {num(row.supply_gw, 1)} GW</b></div>
+          <div><span><i className="line-key is-demand" />Demand</span><b>{num(row.demand_gw, 1)} GW</b></div>
+          <div><span><i className="line-key is-before" />Supply before storage</span><b>{num(row.supply_gw, 1)} GW</b></div>
+          <div><span><i className={`dot-key ${row.dispatch_gw < 0 ? "is-charge" : "is-discharge"}`} />
+            {row.dispatch_gw < -1e-6 ? "Storage charging" : row.dispatch_gw > 1e-6 ? "Storage discharging" : "Storage idle"}</span>
+            <b>{row.dispatch_gw < -1e-6 ? "−" : row.dispatch_gw > 1e-6 ? "+" : ""}{num(Math.abs(row.dispatch_gw), 1)} GW</b></div>
+          <div><span><i className="line-key is-after" />Supply after storage</span><b>{num(row.adjusted_supply_gw, 1)} GW</b></div>
+          <div className="tooltip-sub"><span>Margin (supply − demand)</span>
+            <b><span className="was">{num(row.raw_gap_gw, 1)}</span> → <span className={row.residual_gap_gw < -1e-6 ? "negative" : ""}>{num(row.residual_gap_gw, 1)}</span> GW</b></div>
         </>
       ) : kind === "dispatch" ? (
         <div><span><i className={`dot-key ${row.dispatch_gw < 0 ? "is-charge" : "is-discharge"}`} />{row.dispatch_gw < 0 ? "Charging" : row.dispatch_gw > 0 ? "Discharging" : "Idle"}</span>
@@ -84,12 +98,14 @@ function HourTooltip({ active, label, rows, kind }: {
  * a given window length, so stepping between dates morphs the lines, bands
  * and bars from one period to the next instead of redrawing them.
  */
-const WindowCharts = memo(function WindowCharts({ rows, days, result, gapDomain }: {
-  rows: HourlyResult[]; days: WindowDays; result: RunResult; gapDomain: [number, number];
+const WindowCharts = memo(function WindowCharts({ rows, days, result, view, onView, gapScale, levelScale }: {
+  rows: HourlyResult[]; days: WindowDays; result: RunResult; view: GapView; onView: (view: GapView) => void;
+  gapScale: Scale; levelScale: Scale;
 }) {
   const reduced = useReducedMotion();
   const narrow = useMedia("(max-width: 640px)");
   const residual = useMemo(() => residualPoints(rows), [rows]);
+  const levels = useMemo(() => levelPoints(rows), [rows]);
   const hourly = useMemo(() => rows.map((row, hour) => ({ ...row, hour })), [rows]);
   const every = (days === 1 ? 3 : days === 2 ? 6 : 24) * (narrow && days !== 7 ? 2 : 1);
   const ticks = hourly.filter((_, index) => index % every === 0).map((row) => row.hour);
@@ -118,28 +134,60 @@ const WindowCharts = memo(function WindowCharts({ rows, days, result, gapDomain 
     <div className="day-charts">
       <div className="lane">
         <div className="lane-head">
-          <h4>Supply − demand <small>GW</small></h4>
-          <div className="legend-inline" aria-hidden="true">
-            <span><i className="line-key is-before" />Before</span>
-            <span><i className="line-key is-after" />After</span>
-            <span><i className="band-key is-charge" />Charging</span>
-            <span><i className="band-key is-discharge" />Discharging</span>
+          <div className="lane-title">
+            <h4>{view === "levels" ? "Supply and demand" : "Margin"} <small>{view === "levels" ? "GW" : "supply − demand, GW · below 0 is a shortage"}</small></h4>
+            <div className="segmented is-small" role="tablist" aria-label="Top chart">
+              <button type="button" role="tab" aria-selected={view === "levels"} onClick={() => onView("levels")}>Supply &amp; demand</button>
+              <button type="button" role="tab" aria-selected={view === "margin"} onClick={() => onView("margin")}>Margin</button>
+            </div>
           </div>
+          {view === "levels" ? (
+            <div className="legend-inline" aria-hidden="true">
+              <span><i className="line-key is-demand" />Demand</span>
+              <span><i className="line-key is-before" />Supply before storage</span>
+              <span><i className="line-key is-after" />Supply after storage</span>
+              <span><i className="band-key is-charge" />Charging</span>
+              <span><i className="band-key is-discharge" />Discharging</span>
+              <span><i className="band-key is-shortage" />Shortage</span>
+            </div>
+          ) : (
+            <div className="legend-inline" aria-hidden="true">
+              <span><i className="line-key is-before" />Margin before storage</span>
+              <span><i className="line-key is-after" />Margin after storage</span>
+              <span><i className="band-key is-charge" />Charging</span>
+              <span><i className="band-key is-discharge" />Discharging</span>
+            </div>
+          )}
         </div>
         <ResponsiveContainer width="100%" height={250}>
-          <ComposedChart data={residual} {...common}>
-            <CartesianGrid stroke="var(--grid)" vertical={false} />
-            {gapDomain[0] < 0 ? <ReferenceArea y1={gapDomain[0]} y2={0} fill="var(--c-deficit)" fillOpacity={0.06} /> : null}
-            {dayLines}
-            <XAxis {...xAxis} />
-            <YAxis {...yAxis} domain={gapDomain} allowDataOverflow />
-            <ReferenceLine y={0} stroke="var(--axis-strong)" />
-            <Area type="linear" dataKey="chargingBand" fill="var(--c-charge)" fillOpacity={0.22} stroke="none" activeDot={false} {...motion} />
-            <Area type="linear" dataKey="dischargingBand" fill="var(--c-discharge)" fillOpacity={0.26} stroke="none" activeDot={false} {...motion} />
-            <Line type="linear" dataKey="raw_gap_gw" stroke="var(--c-before)" strokeWidth={1.75} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} {...motion} />
-            <Line type="linear" dataKey="residual_gap_gw" stroke="var(--c-after)" strokeWidth={3} dot={false} activeDot={{ r: 5, stroke: "var(--surface)", strokeWidth: 2 }} {...motion} />
-            <Tooltip content={<HourTooltip rows={rows} kind="gap" />} cursor={cursor} />
-          </ComposedChart>
+          {view === "levels" ? (
+            <ComposedChart data={levels} {...common}>
+              <CartesianGrid stroke="var(--grid)" vertical={false} />
+              {dayLines}
+              <XAxis {...xAxis} />
+              <YAxis {...yAxis} domain={levelScale.domain} ticks={levelScale.ticks} allowDataOverflow />
+              <Area type="linear" dataKey="chargingBand" fill="var(--c-charge)" fillOpacity={0.22} stroke="none" activeDot={false} {...motion} />
+              <Area type="linear" dataKey="dischargingBand" fill="var(--c-discharge)" fillOpacity={0.3} stroke="none" activeDot={false} {...motion} />
+              <Area type="linear" dataKey="shortageBand" fill="var(--c-deficit)" fillOpacity={0.55} stroke="none" activeDot={false} {...motion} />
+              <Line type="linear" dataKey="supply_gw" stroke="var(--c-before)" strokeWidth={1.75} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} {...motion} />
+              <Line type="linear" dataKey="demand_gw" stroke="var(--c-demand)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} {...motion} />
+              <Line type="linear" dataKey="adjusted_supply_gw" stroke="var(--c-after)" strokeWidth={3} dot={false} activeDot={{ r: 5, stroke: "var(--surface)", strokeWidth: 2 }} {...motion} />
+              <Tooltip content={<HourTooltip rows={rows} kind="gap" />} cursor={cursor} />
+            </ComposedChart>
+          ) : (
+            <ComposedChart data={residual} {...common}>
+              <CartesianGrid stroke="var(--grid)" vertical={false} />
+              {dayLines}
+              <XAxis {...xAxis} />
+              <YAxis {...yAxis} domain={gapScale.domain} ticks={gapScale.ticks} allowDataOverflow />
+              <ReferenceLine y={0} stroke="var(--axis-strong)" strokeWidth={1.5} />
+              <Area type="linear" dataKey="chargingBand" fill="var(--c-charge)" fillOpacity={0.22} stroke="none" activeDot={false} {...motion} />
+              <Area type="linear" dataKey="dischargingBand" fill="var(--c-discharge)" fillOpacity={0.3} stroke="none" activeDot={false} {...motion} />
+              <Line type="linear" dataKey="raw_gap_gw" stroke="var(--c-before)" strokeWidth={1.75} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} {...motion} />
+              <Line type="linear" dataKey="residual_gap_gw" stroke="var(--c-after)" strokeWidth={3} dot={false} activeDot={{ r: 5, stroke: "var(--surface)", strokeWidth: 2 }} {...motion} />
+              <Tooltip content={<HourTooltip rows={rows} kind="gap" />} cursor={cursor} />
+            </ComposedChart>
+          )}
         </ResponsiveContainer>
       </div>
 
@@ -197,15 +245,25 @@ export function DayDetail({ result, dates, start, days, onStart, onDays }: {
 }) {
   const rows = useMemo(() => windowRows(result.hourly, start, days), [result.hourly, start, days]);
   const tightest = useMemo(() => tightestDate(result.hourly), [result.hourly]);
-  const gapDomain = useMemo<[number, number]>(() => {
+  const gapScale = useMemo(() => {
     let low = 0;
     let high = 0;
     for (const row of result.hourly) {
       low = Math.min(low, row.raw_gap_gw, row.residual_gap_gw);
       high = Math.max(high, row.raw_gap_gw, row.residual_gap_gw);
     }
-    return [niceLimit(low, -1), niceLimit(high, 1)];
+    return niceScale(low, high);
   }, [result.hourly]);
+  const levelScale = useMemo(() => {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const row of result.hourly) {
+      low = Math.min(low, row.demand_gw, row.supply_gw, row.adjusted_supply_gw);
+      high = Math.max(high, row.demand_gw, row.supply_gw, row.adjusted_supply_gw);
+    }
+    return niceScale(low, high);
+  }, [result.hourly]);
+  const [view, setView] = useState<GapView>("levels");
   const index = dates.indexOf(start);
   const last = Math.max(0, dates.length - days);
   const eta = Math.sqrt(result.storage.rte);
@@ -258,7 +316,7 @@ export function DayDetail({ result, dates, start, days, onStart, onDays }: {
         <div><dt>Short hours</dt><dd><span className="was">{stats.hoursBefore}</span> → <b>{stats.hoursAfter}</b></dd></div>
         <div><dt>Cycles</dt><dd><b>{num(stats.cycles, 2)}</b></dd></div>
       </dl>
-      <WindowCharts rows={rows} days={days} result={result} gapDomain={gapDomain} />
+      <WindowCharts rows={rows} days={days} result={result} view={view} onView={setView} gapScale={gapScale} levelScale={levelScale} />
     </section>
   );
 }

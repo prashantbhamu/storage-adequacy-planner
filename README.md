@@ -3,7 +3,7 @@
 A local, open-source decision-support tool for exploring how a single combined
 storage resource can reshape an hourly supply–demand residual profile.
 
-![Storage Adequacy Planner interface](docs/interface.png)
+![Storage Adequacy Planner showing results for the example financial year](docs/interface.png)
 
 ## What it does
 
@@ -19,6 +19,18 @@ sensitivity on each storage limit and a downloadable workbook.
 The tool can also size storage: the minimum energy capacity, power, or power
 at a fixed duration that holds the residual gap at or above a target in every
 hour.
+
+Every hour of the period at a glance — here the example year before storage,
+with evening and night deficits in red:
+
+![Heatmap of supply minus demand for every hour of the year](docs/heatmap.png)
+
+Hourly detail for one day, two days or a week, midnight to midnight: demand and
+available supply before and after storage (with charging, discharging and any
+remaining shortage shaded), storage operation and stored energy. A toggle
+switches the top chart to the supply − demand margin:
+
+![Two days of supply minus demand, storage operation and stored energy](docs/hourly-detail.png)
 
 This is a **floor-lifting** model, not a merchant revenue optimiser. Its ordered
 objectives are:

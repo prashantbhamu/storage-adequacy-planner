@@ -44,3 +44,25 @@ test('stable point counts for day morphs and no bogus band on unchanged gaps', (
   assert.equal(result.length, 47);
   assert.ok(result.every(row => row.chargingBand[0] === row.chargingBand[1] && row.dischargingBand[0] === row.dischargingBand[1]));
 });
+
+test('supply and demand view: storage bands between supply lines, shortage only below demand', async () => {
+  const src = await readFile(new URL('../src/chartData.ts', import.meta.url), 'utf8');
+  const out = ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ES2020 } }).outputText;
+  const { levelPoints } = await import(`data:text/javascript;base64,${Buffer.from(out).toString('base64')}`);
+  const row = (hour, demand, supply, dispatch) => ({
+    timestamp: `2029-04-01 ${String(hour).padStart(2, '0')}:00:00`,
+    demand_gw: demand, supply_gw: supply, adjusted_supply_gw: supply + dispatch, dispatch_gw: dispatch,
+  });
+  // Charging from surplus, then discharging into a deficit that is only partly covered.
+  const points = levelPoints([row(0, 100, 150, -30), row(1, 120, 80, 25)]);
+  assert.equal(points.length, 3);
+  assert.deepEqual(points[0].chargingBand, [120, 150]);
+  assert.deepEqual(points[0].shortageBand, [100, 100]);
+  assert.deepEqual(points[2].dischargingBand, [80, 105]);
+  assert.deepEqual(points[2].shortageBand, [105, 120]);
+  // The switch from charging to discharging is split exactly, with no overlap.
+  const middle = points[1];
+  assert.equal(middle.adjusted_supply_gw, middle.supply_gw);
+  assert.equal(middle.chargingBand[0], middle.chargingBand[1]);
+  assert.equal(middle.dischargingBand[0], middle.dischargingBand[1]);
+});
