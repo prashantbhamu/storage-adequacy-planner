@@ -22,7 +22,7 @@ def month_frame():
 
 
 @pytest.mark.parametrize("extension", ["csv", "xlsx"])
-def test_three_column_upload_without_mapping_or_solar(extension):
+def test_three_column_upload_without_mapping(extension):
     frame = month_frame()
     if extension == "csv":
         payload = frame.to_csv(index=False).encode()
@@ -32,8 +32,6 @@ def test_three_column_upload_without_mapping_or_solar(extension):
         payload = stream.getvalue()
     result = validate_uploaded_table(payload, f"input.{extension}")
     assert len(result.timestamps) == 672
-    assert not result.solar_provided
-    np.testing.assert_array_equal(result.solar, np.zeros(672))
     assert set(result.mapping) == {"timestamp", "demand", "supply"}
 
 
@@ -56,12 +54,12 @@ def test_missing_ambiguous_or_wrong_unit_headers_fail_closed(headers, message):
         detect_columns(headers)
 
 
-def test_extra_solar_is_optional_and_never_blocks_upload():
+def test_extra_columns_such_as_solar_are_ignored():
     frame = month_frame()
-    for solar, supplied in [(1.5, True), ("not required", False), (-1, False)]:
-        frame["Solar Generation (GW)"] = solar
+    for extra in (1.5, "not required", -1):
+        frame["Solar Generation (GW)"] = extra
         result = validate_uploaded_table(frame.to_csv(index=False).encode(), "input.csv")
-        assert result.solar_provided == supplied
+        assert set(result.mapping) == {"timestamp", "demand", "supply"}
 
 
 def test_bad_numeric_data_still_rejected():
@@ -71,33 +69,50 @@ def test_bad_numeric_data_still_rejected():
         validate_uploaded_table(frame.to_csv(index=False).encode(), "input.csv")
 
 
-def test_three_column_api_run_download_and_legacy_parity():
+SETTINGS = {"charge_power_gw": 2, "discharge_power_gw": 2, "energy_gwh": 8,
+            "rte_percent": 90, "max_cycles_per_accounting_day": 1,
+            "initial_soc_percent": 0, "final_soc_percent": 0}
+
+
+def test_three_column_api_run_download_and_extra_column_parity():
     frame = month_frame()
     client = TestClient(app)
     files = {"file": ("february.csv", frame.to_csv(index=False).encode(), "text/csv")}
     validation = client.post("/api/validate", files=files)
     assert validation.status_code == 200
-    settings = json.dumps({"charge_power_gw": 2, "discharge_power_gw": 2,
-                           "energy_gwh": 8, "rte_percent": 90,
-                           "max_cycles_per_accounting_day": 1})
+    settings = json.dumps(SETTINGS)
     response = client.post("/api/optimize", files=files, data={"settings": settings})
     assert response.status_code == 200, response.text
     result = response.json()
     assert result["validation"]["passed"]
-    assert all(row["solar_gw"] is None for row in result["hourly"])
+    assert all("solar_gw" not in row for row in result["hourly"])
     download = client.get(f"/api/download/{result['run_id']}")
     assert download.status_code == 200
     workbook = load_workbook(io.BytesIO(download.content), read_only=True)
     assert workbook.sheetnames == ["Summary", "Hourly Results"]
     assert workbook["Hourly Results"].max_row == 673
-    assert all(row[0] is None for row in workbook["Hourly Results"].iter_rows(min_row=2, min_col=4, max_col=4, values_only=True))
+    assert workbook["Hourly Results"].max_column == 11
+    headers = next(workbook["Hourly Results"].iter_rows(max_row=1, values_only=True))
+    assert not any("Solar" in str(value) for value in headers)
     workbook.close()
     frame["Solar Generation (GW)"] = 100.0
-    legacy = client.post("/api/optimize", files={"file": ("old.csv", frame.to_csv(index=False).encode(), "text/csv")}, data={"settings": settings})
-    assert legacy.status_code == 200
-    for before, after in zip(result["hourly"], legacy.json()["hourly"]):
+    extra = client.post("/api/optimize", files={"file": ("old.csv", frame.to_csv(index=False).encode(), "text/csv")}, data={"settings": settings})
+    assert extra.status_code == 200
+    for before, after in zip(result["hourly"], extra.json()["hourly"]):
         for key in ("charge_gw", "discharge_gw", "soc_end_gwh", "residual_gap_gw"):
             assert before[key] == after[key]
+
+
+def test_api_requires_initial_and_final_soc():
+    frame = month_frame()
+    settings = {key: value for key, value in SETTINGS.items() if key != "final_soc_percent"}
+    response = TestClient(app).post(
+        "/api/optimize",
+        files={"file": ("february.csv", frame.to_csv(index=False).encode(), "text/csv")},
+        data={"settings": json.dumps(settings)},
+    )
+    assert response.status_code == 400
+    assert "final_soc_percent" in response.json()["detail"]
 
 
 def test_api_rejects_ambiguous_columns():

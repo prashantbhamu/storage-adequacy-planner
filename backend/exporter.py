@@ -4,7 +4,7 @@ import io
 from datetime import datetime
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
@@ -21,16 +21,37 @@ LIGHT_BORDER = "C9D6E2"
 WHITE = "FFFFFF"
 
 
-def _section_title(cell, text: str) -> None:
-    cell.value = text
+def _section_title(sheet, row: int, text: str, last_column: int = 6) -> None:
+    cell = sheet.cell(row, 1, text)
     cell.font = Font(name="Aptos Display", size=14, bold=True, color=NAVY)
     cell.fill = PatternFill("solid", fgColor=PALE_BLUE)
     cell.alignment = Alignment(vertical="center")
+    sheet.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_column)
 
 
 def _label(cell, text: str) -> None:
     cell.value = text
     cell.font = Font(name="Aptos", size=10, bold=True, color=NAVY)
+
+
+def _header_row(sheet, row: int, headers: tuple[str, ...]) -> None:
+    for column, value in enumerate(headers, start=1):
+        cell = sheet.cell(row, column, value)
+        cell.font = Font(name="Aptos", size=10, bold=True, color=WHITE)
+        cell.fill = PatternFill("solid", fgColor=TEAL)
+
+
+def _key_values(sheet, row: int, rows: list[tuple], number_format: str = "0.000") -> int:
+    """Write label/value/unit rows; return the next free row."""
+    for label, value, *unit in rows:
+        _label(sheet.cell(row, 1), label)
+        cell = sheet.cell(row, 2, value)
+        if isinstance(value, float):
+            cell.number_format = unit[1] if len(unit) > 1 else number_format
+        if unit:
+            sheet.cell(row, 3, unit[0])
+        row += 1
+    return row + 1
 
 
 def _style_summary_sheet(
@@ -44,20 +65,21 @@ def _style_summary_sheet(
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A4"
     sheet.merge_cells("A1:F1")
-    sheet["A1"] = "Storage Dispatch Optimiser v2 — Leximin"
+    sheet["A1"] = "Storage Dispatch Optimiser"
     sheet["A1"].font = Font(name="Aptos Display", size=20, bold=True, color=WHITE)
     sheet["A1"].fill = PatternFill("solid", fgColor=NAVY)
     sheet["A1"].alignment = Alignment(vertical="center")
     sheet.row_dimensions[1].height = 34
     sheet.merge_cells("A2:F2")
     sheet["A2"] = (
-        f"{validated.period_label} · 48 h look-ahead · 24 h commitment · continuous SOC"
+        f"{validated.period_label} · 48 h look-ahead · 24 h commitment · "
+        "anchored to the perfect-foresight optimum"
     )
     sheet["A2"].font = Font(name="Aptos", size=10, color=SLATE)
 
-    _section_title(sheet["A4"], "Run information")
-    sheet.merge_cells("A4:B4")
-    run_rows = [
+    row = 4
+    _section_title(sheet, row, "Run information")
+    row = _key_values(sheet, row + 1, [
         ("Source file", validated.filename),
         ("Source worksheet", validated.sheet_name or "CSV"),
         ("Period", validated.period_label),
@@ -65,146 +87,123 @@ def _style_summary_sheet(
         ("Generated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         ("Tool version", VERSION),
         ("Dispatch policy", "Progressive leximin"),
-    ]
-    for row, (label, value) in enumerate(run_rows, start=5):
-        _label(sheet.cell(row, 1), label)
-        sheet.cell(row, 2, value)
+    ])
 
-    _section_title(sheet["D4"], "Storage assumptions")
-    sheet.merge_cells("D4:F4")
     assumptions = storage_spec_dict(spec)
-    assumption_rows = [
+    _section_title(sheet, row, "Storage assumptions")
+    row = _key_values(sheet, row + 1, [
         ("Maximum charge", assumptions["charge_power_gw"], "GW"),
         ("Maximum discharge", assumptions["discharge_power_gw"], "GW"),
         ("Energy capacity", assumptions["energy_gwh"], "GWh"),
-        ("Round-trip efficiency", assumptions["rte"], "%"),
-        ("One-way efficiency", assumptions["charge_efficiency"], "%"),
+        ("Round-trip efficiency", assumptions["rte"], "%", "0.000%"),
+        ("One-way efficiency", assumptions["charge_efficiency"], "%", "0.000%"),
         ("Maximum cycles / 06:00 day", assumptions["max_cycles_per_accounting_day"], "cycles"),
         ("Internal throughput cap", assumptions["daily_internal_throughput_cap_gwh"], "GWh/direction"),
-    ]
-    for row, (label, value, unit) in enumerate(assumption_rows, start=5):
-        _label(sheet.cell(row, 4), label)
-        cell = sheet.cell(row, 5, value)
-        cell.number_format = "0.000"
-        if unit == "%":
-            cell.number_format = "0.000%"
-        sheet.cell(row, 6, unit)
+        ("Initial SOC", assumptions["initial_soc_fraction"], "% of capacity", "0.0%"),
+        ("Final SOC", assumptions["final_soc_fraction"], "% of capacity", "0.0%"),
+        ("Minimum SOC", assumptions["min_soc_fraction"], "% of capacity", "0.0%"),
+        ("Maximum SOC", assumptions["max_soc_fraction"], "% of capacity", "0.0%"),
+        ("Charging allowed", "Surplus hours only" if spec.charge_from_surplus_only else "Any hour"),
+    ])
 
-    metric_start = 14
-    _section_title(sheet.cell(metric_start, 1), "Before and after")
-    sheet.merge_cells(start_row=metric_start, start_column=1, end_row=metric_start, end_column=6)
-    headers = ("Metric", "Before", "After", "Change", "Unit", "Interpretation")
-    for column, value in enumerate(headers, start=1):
-        cell = sheet.cell(metric_start + 1, column, value)
-        cell.font = Font(name="Aptos", size=10, bold=True, color=WHITE)
-        cell.fill = PatternFill("solid", fgColor=TEAL)
     summary = result.summary
-    metric_rows = [
-        (
-            "Minimum residual gap",
-            summary["minimum_gap_before_gw"],
-            summary["minimum_gap_after_gw"],
-            "GW",
-            "Higher is better",
-        ),
-        (
-            "Maximum residual gap",
-            summary["maximum_gap_before_gw"],
-            summary["maximum_gap_after_gw"],
-            "GW",
-            "Lower after charging is better",
-        ),
-        (
-            "Shortage energy",
-            summary["shortage_energy_before_gwh"],
-            summary["shortage_energy_after_gwh"],
-            "GWh",
-            "Lower is better",
-        ),
-        (
-            "Shortage hours",
-            summary["shortage_hours_before"],
-            summary["shortage_hours_after"],
-            "hours",
-            "Lower is better",
-        ),
-    ]
-    for row, (label, before, after, unit, interpretation) in enumerate(
-        metric_rows, start=metric_start + 2
+    _section_title(sheet, row, "Before and after")
+    _header_row(sheet, row + 1, ("Metric", "Before", "After", "Change", "Unit", "Interpretation"))
+    row += 2
+    for label, before, after, unit, interpretation in (
+        ("Minimum residual gap", summary["minimum_gap_before_gw"], summary["minimum_gap_after_gw"], "GW", "Higher is better"),
+        ("Maximum residual gap", summary["maximum_gap_before_gw"], summary["maximum_gap_after_gw"], "GW", "Lower after charging is better"),
+        ("Shortage energy", summary["shortage_energy_before_gwh"], summary["shortage_energy_after_gwh"], "GWh", "Lower is better"),
+        ("Shortage hours", summary["shortage_hours_before"], summary["shortage_hours_after"], "hours", "Lower is better"),
     ):
-        sheet.cell(row, 1, label)
-        sheet.cell(row, 2, before)
-        sheet.cell(row, 3, after)
-        sheet.cell(row, 4, after - before)
-        sheet.cell(row, 5, unit)
-        sheet.cell(row, 6, interpretation)
-        for column in (2, 3, 4):
-            sheet.cell(row, column).number_format = "0.000"
+        for column, value in enumerate((label, before, after, after - before, unit, interpretation), start=1):
+            cell = sheet.cell(row, column, value)
+            if column in (2, 3, 4):
+                cell.number_format = "0.000"
+        row += 1
+    row += 1
 
-    operation_start = metric_start + 8
-    _section_title(sheet.cell(operation_start, 1), "Storage operation")
-    sheet.merge_cells(
-        start_row=operation_start, start_column=1, end_row=operation_start, end_column=6
-    )
-    operation_rows = [
+    benchmark = result.benchmark
+    _section_title(sheet, row, "Perfect-foresight check")
+    row = _key_values(sheet, row + 1, [
+        ("Perfect-foresight floor", benchmark["perfect_foresight_floor_gw"], "GW"),
+        ("Rolling-horizon floor", benchmark["rolling_floor_gw"], "GW"),
+        ("Perfect-foresight shortage", benchmark["perfect_foresight_shortage_gwh"], "GWh"),
+        ("Rolling-horizon shortage", benchmark["rolling_shortage_gwh"], "GWh"),
+        ("Floor below optimum", benchmark["floor_shortfall_gw"], "GW", "0.000000"),
+        ("Shortage above optimum", benchmark["excess_shortage_gwh"], "GWh", "0.000000"),
+    ])
+
+    limits = result.limits
+    _section_title(sheet, row, "What limits the result")
+    _header_row(sheet, row + 1, ("Binding limit", "Shortage hours", "Shortage energy (GWh)"))
+    row += 2
+    for key, label in limits["labels"].items():
+        sheet.cell(row, 1, label)
+        sheet.cell(row, 2, limits["shortage_hours"][key])
+        sheet.cell(row, 3, limits["shortage_energy_gwh"][key]).number_format = "0.000"
+        row += 1
+    floor_hour = limits["floor_hour"]
+    _label(sheet.cell(row, 1), "Lowest residual hour")
+    sheet.cell(row, 2, floor_hour["timestamp"])
+    sheet.cell(row, 3, floor_hour["residual_gap_gw"]).number_format = "0.000"
+    sheet.cell(row, 4, limits["labels"][floor_hour["limit"]])
+    row += 1
+    _label(sheet.cell(row, 1), "Most effective +10% increase")
+    sheet.cell(row, 2, limits["most_effective_increase"] or "None of the tested limits")
+    row += 2
+
+    if result.sensitivity:
+        _section_title(sheet, row, "Sensitivity: +10% of each limit (perfect foresight)")
+        _header_row(sheet, row + 1, ("Parameter", "From", "To", "Unit", "Floor change (GW)", "Shortage change (GWh)"))
+        row += 2
+        for item in result.sensitivity:
+            values = (item["parameter"], item["from"], item["to"], item["unit"],
+                      item["floor_change_gw"], item["shortage_change_gwh"])
+            for column, value in enumerate(values, start=1):
+                cell = sheet.cell(row, column, value)
+                if isinstance(value, float):
+                    cell.number_format = "0.000"
+            row += 1
+        row += 1
+
+    _section_title(sheet, row, "Storage operation")
+    row = _key_values(sheet, row + 1, [
         ("Peak charging", summary["peak_charge_gw"], "GW"),
         ("Peak discharging", summary["peak_discharge_gw"], "GW"),
         ("Total grid-side charging", summary["total_charge_gwh"], "GWh"),
         ("Total grid-side discharging", summary["total_discharge_gwh"], "GWh"),
         ("Conversion losses", summary["conversion_losses_gwh"], "GWh"),
         ("Equivalent full cycles", summary["equivalent_cycles"], "cycles"),
-    ]
-    for row, (label, value, unit) in enumerate(operation_rows, start=operation_start + 1):
-        _label(sheet.cell(row, 1), label)
-        sheet.cell(row, 2, value).number_format = "0.000"
-        sheet.cell(row, 3, unit)
+    ])
 
-    validation_start = operation_start + 8
-    _section_title(sheet.cell(validation_start, 1), "Constraint validation")
-    sheet.merge_cells(
-        start_row=validation_start, start_column=1, end_row=validation_start, end_column=6
-    )
-    validation_rows = [
+    diagnostics = result.validation["diagnostics"]
+    checks = result.validation["checks"]
+    _section_title(sheet, row, "Constraint validation")
+    row = _key_values(sheet, row + 1, [
         ("Overall validation", "Passed" if result.validation["passed"] else "Failed"),
-        ("Maximum SOC", result.validation["diagnostics"]["maximum_soc_gwh"]),
-        ("Maximum charge", result.validation["diagnostics"]["maximum_charge_gw"]),
-        ("Maximum discharge", result.validation["diagnostics"]["maximum_discharge_gw"]),
-        (
-            "Maximum internal charge / 06:00 day",
-            result.validation["diagnostics"]["maximum_06_day_internal_charge_gwh"],
-        ),
-        (
-            "Maximum internal discharge / 06:00 day",
-            result.validation["diagnostics"]["maximum_06_day_internal_discharge_gwh"],
-        ),
-        (
-            "Simultaneous charge/discharge",
-            result.validation["checks"]["simultaneous_charge_discharge_gw"],
-        ),
-        ("Final SOC", result.validation["checks"]["final_soc_abs_gwh"]),
-    ]
-    for row, (label, value) in enumerate(validation_rows, start=validation_start + 1):
-        _label(sheet.cell(row, 1), label)
-        sheet.cell(row, 2, value)
-        if isinstance(value, (int, float)):
-            sheet.cell(row, 2).number_format = "0.000000"
+        ("Minimum SOC", diagnostics["minimum_soc_gwh"], "GWh", "0.000000"),
+        ("Maximum SOC", diagnostics["maximum_soc_gwh"], "GWh", "0.000000"),
+        ("Final SOC", diagnostics["final_soc_gwh"], "GWh", "0.000000"),
+        ("Maximum charge", diagnostics["maximum_charge_gw"], "GW", "0.000000"),
+        ("Maximum discharge", diagnostics["maximum_discharge_gw"], "GW", "0.000000"),
+        ("Maximum internal charge / 06:00 day", diagnostics["maximum_06_day_internal_charge_gwh"], "GWh", "0.000000"),
+        ("Maximum internal discharge / 06:00 day", diagnostics["maximum_06_day_internal_discharge_gwh"], "GWh", "0.000000"),
+        ("Simultaneous charge/discharge", checks["simultaneous_charge_discharge_gw"], "GW", "0.000000"),
+        ("Charging beyond surplus", checks["surplus_charging_violation_gw"], "GW", "0.000000"),
+    ])
 
-    daily_start = validation_start + 11
-    _section_title(sheet.cell(daily_start, 1), "Daily performance")
-    sheet.merge_cells(start_row=daily_start, start_column=1, end_row=daily_start, end_column=6)
-    daily_headers = (
-        "Date",
+    _section_title(sheet, row, "Daily performance")
+    _header_row(sheet, row + 1, (
+        "Accounting day",
         "Minimum gap before (GW)",
         "Minimum gap after (GW)",
         "Shortage before (GWh)",
         "Shortage after (GWh)",
         "Equivalent cycles",
-    )
-    for column, value in enumerate(daily_headers, start=1):
-        cell = sheet.cell(daily_start + 1, column, value)
-        cell.font = Font(name="Aptos", bold=True, color=WHITE)
-        cell.fill = PatternFill("solid", fgColor=TEAL)
-    for row, daily in enumerate(result.daily_performance, start=daily_start + 2):
+    ))
+    row += 2
+    for daily in result.daily_performance:
         values = (
             daily["date"],
             daily["minimum_gap_before_gw"],
@@ -217,35 +216,33 @@ def _style_summary_sheet(
             sheet.cell(row, column, value)
             if column > 1:
                 sheet.cell(row, column).number_format = "0.000"
+        row += 1
 
-    widths = {1: 34, 2: 18, 3: 18, 4: 35, 5: 18, 6: 30}
+    widths = {1: 38, 2: 20, 3: 22, 4: 30, 5: 20, 6: 30}
     for column, width in widths.items():
         sheet.column_dimensions[get_column_letter(column)].width = width
 
 
-def _style_hourly_sheet(
-    workbook: Workbook,
-    validated: ValidatedInput,
-    result: OptimizationResult,
-) -> None:
+HOURLY_HEADERS = (
+    "Timestamp",
+    "Demand (GW)",
+    "Available Supply (GW)",
+    "Raw Gap (GW)",
+    "Storage Charge (GW)",
+    "Storage Discharge (GW)",
+    "Storage Dispatch (GW)",
+    "Adjusted Supply (GW)",
+    "Residual Gap (GW)",
+    "SOC End (GWh)",
+    "06:00 Accounting Day",
+)
+
+
+def _style_hourly_sheet(workbook: Workbook, result: OptimizationResult) -> None:
     sheet = workbook.create_sheet("Hourly Results")
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = "A2"
-    headers = (
-        "Timestamp",
-        "Demand (GW)",
-        "Available Supply (GW)",
-        "Solar (GW)",
-        "Raw Gap (GW)",
-        "Storage Charge (GW)",
-        "Storage Discharge (GW)",
-        "Storage Dispatch (GW)",
-        "Adjusted Supply (GW)",
-        "Residual Gap (GW)",
-        "SOC End (GWh)",
-        "06:00 Accounting Day",
-    )
-    for column, value in enumerate(headers, start=1):
+    for column, value in enumerate(HOURLY_HEADERS, start=1):
         cell = sheet.cell(1, column, value)
         cell.font = Font(name="Aptos", bold=True, color=WHITE)
         cell.fill = PatternFill("solid", fgColor=NAVY)
@@ -257,7 +254,6 @@ def _style_hourly_sheet(
             timestamp,
             result.demand[source],
             result.supply[source],
-            result.solar[source] if validated.solar_provided else None,
             result.raw_gap[source],
             result.charge[source],
             result.discharge[source],
@@ -270,10 +266,11 @@ def _style_hourly_sheet(
         for column, value in enumerate(values, start=1):
             sheet.cell(index, column, value)
         sheet.cell(index, 1).number_format = "yyyy-mm-dd hh:mm"
-        for column in range(2, 12):
+        for column in range(2, 11):
             sheet.cell(index, column).number_format = "0.000000"
 
-    table = Table(displayName="HourlyStorageResults", ref=f"A1:L{len(result.timestamps) + 1}")
+    last_column = get_column_letter(len(HOURLY_HEADERS))
+    table = Table(displayName="HourlyStorageResults", ref=f"A1:{last_column}{len(result.timestamps) + 1}")
     table.tableStyleInfo = TableStyleInfo(
         name="TableStyleMedium2",
         showFirstColumn=False,
@@ -282,7 +279,7 @@ def _style_hourly_sheet(
         showColumnStripes=False,
     )
     sheet.add_table(table)
-    widths = (20, 16, 22, 14, 16, 20, 23, 23, 22, 20, 18, 22)
+    widths = (20, 16, 22, 16, 20, 23, 23, 22, 20, 18, 22)
     for column, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column)].width = width
 
@@ -293,14 +290,13 @@ def build_results_workbook(
     result: OptimizationResult,
 ) -> bytes:
     workbook = Workbook()
-    workbook.properties.title = "Storage Dispatch Optimiser v2 — Progressive Leximin"
+    workbook.properties.title = "Storage Dispatch Optimiser — Progressive Leximin"
     workbook.properties.description = (
         "; ".join(METHOD_OBJECTIVES)
-        + ". Solar is optional reference-only; blank means not supplied. "
-        "Hour counts use a 1 kW numerical zero tolerance."
+        + ". Hour counts use a 1 kW numerical zero tolerance."
     )
     _style_summary_sheet(workbook, validated, spec, result)
-    _style_hourly_sheet(workbook, validated, result)
+    _style_hourly_sheet(workbook, result)
     for sheet in workbook.worksheets:
         sheet.sheet_properties.pageSetUpPr.fitToPage = True
         sheet.page_setup.fitToWidth = 1

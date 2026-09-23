@@ -25,7 +25,18 @@ const EMPTY_STORAGE: StorageInputs = {
   energy_gwh: "",
   rte_percent: "",
   max_cycles_per_accounting_day: "",
+  initial_soc_percent: "",
+  final_soc_percent: "",
+  min_soc_percent: "0",
+  max_soc_percent: "100",
 };
+
+const PERCENT_FIELDS: Array<keyof StorageInputs> = [
+  "initial_soc_percent",
+  "final_soc_percent",
+  "min_soc_percent",
+  "max_soc_percent",
+];
 
 const METHOD_STEPS = [
   "Charge in surplus hours",
@@ -51,6 +62,10 @@ const STORAGE_FIELDS: Array<[
     "cycles",
     "0.00",
   ],
+  ["initial_soc_percent", "Initial SOC", "%", "0.0"],
+  ["final_soc_percent", "Final SOC", "%", "0.0"],
+  ["min_soc_percent", "Minimum SOC", "%", "0.0"],
+  ["max_soc_percent", "Maximum SOC", "%", "100.0"],
 ];
 
 async function responseJson<T>(response: Response): Promise<T> {
@@ -374,23 +389,33 @@ export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [storage, setStorage] = useState<StorageInputs>(EMPTY_STORAGE);
+  const [surplusOnly, setSurplusOnly] = useState(true);
   const [validation, setValidation] = useState<Validation | null>(null);
   const [validationError, setValidationError] = useState("");
   const [runError, setRunError] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
 
-  const assumptionsValid = Object.entries(storage).every(([key, value]) => {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return false;
-    return key !== "rte_percent" || number <= 100;
-  });
+  const assumptionsValid = (() => {
+    const values = Object.fromEntries(
+      Object.entries(storage).map(([key, value]) => [key, value.trim() === "" ? NaN : Number(value)]),
+    ) as Record<keyof StorageInputs, number>;
+    if (!Object.values(values).every(Number.isFinite)) return false;
+    const positive = Object.keys(values)
+      .filter((key) => !PERCENT_FIELDS.includes(key as keyof StorageInputs))
+      .every((key) => values[key as keyof StorageInputs] > 0);
+    const { min_soc_percent: min, max_soc_percent: max } = values;
+    return positive
+      && values.rte_percent <= 100
+      && min >= 0 && min < max && max <= 100
+      && [values.initial_soc_percent, values.final_soc_percent].every((level) => level >= min && level <= max);
+  })();
   const runReadiness = !file
     ? "Upload a valid input file to continue."
     : !validation
       ? "Waiting for the input file to pass validation."
       : !assumptionsValid
-        ? "Enter all five storage assumptions to enable the run."
+        ? "Enter all storage assumptions; initial and final SOC must lie within the SOC range."
         : "Ready to optimise locally.";
 
   const upload = (selected: File | null) => {
@@ -435,7 +460,7 @@ export default function App() {
     try {
       const body = new FormData();
       body.append("file", file);
-      body.append("settings", JSON.stringify(storage));
+      body.append("settings", JSON.stringify({ ...storage, charge_from_surplus_only: surplusOnly }));
       const response = await fetch("/api/optimize", { method: "POST", body });
       setResult(await responseJson<RunResult>(response));
     } catch (error) {
@@ -490,6 +515,14 @@ export default function App() {
                 onChange={(value) => setStorage((current) => ({ ...current, [field]: value }))}
               />
             ))}
+            <label className="number-row">
+              <span>Charge only from surplus hours</span>
+              <input
+                type="checkbox"
+                checked={surplusOnly}
+                onChange={(event) => setSurplusOnly(event.target.checked)}
+              />
+            </label>
           </section>
 
           <section className="rail-section validation-section">

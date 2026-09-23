@@ -1,4 +1,4 @@
-"""V2 policy and full-year golden regressions. No user-facing presets."""
+"""Leximin policy and public golden regression. No user-facing presets."""
 from dataclasses import replace
 from datetime import datetime, timedelta
 import hashlib
@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 
 from backend.data_io import validate_uploaded_table
 from backend.exporter import build_results_workbook
-from backend.optimizer import StorageSpec, _solve_horizon, optimize_storage
+from backend.optimizer import StorageSpec, _solve_horizon, accounting_day, optimize_storage
 from tests.test_tool import synthetic_run
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -26,18 +26,11 @@ def test_progressive_leveling_and_blocked_hours(gaps, expected):
     timestamps = [datetime(2031, 5, 1, 6) + timedelta(hours=i) for i in range(len(gaps))]
     spec = StorageSpec(100, 100, 20, 1, 1)
     gap = np.asarray(gaps)
-    solved = _solve_horizon(gap, np.zeros(len(gap)), timestamps, 0, {}, {}, spec, [], True)
+    caps = {accounting_day(timestamps[0]): spec.daily_internal_throughput_cap_gwh}
+    solved = _solve_horizon(gap, timestamps, 0, {}, {}, spec, caps, 0.0, final_soc=0.0)
     np.testing.assert_allclose(gap + solved["discharge"] - solved["charge"], expected, atol=1e-6)
     assert len(solved["levels"]) > 1
     assert max(np.minimum(solved["charge"], solved["discharge"])) < 1e-7
-
-
-def test_solar_cannot_change_dispatch():
-    times, demand, supply, solar, spec = synthetic_run()
-    first = optimize_storage(times, demand, supply, solar, spec)
-    second = optimize_storage(times, demand, supply, np.arange(len(times)) * 100, spec)
-    np.testing.assert_array_equal(first.dispatch, second.dispatch)
-    np.testing.assert_array_equal(first.soc_end, second.soc_end)
 
 
 @pytest.mark.parametrize("spec", [
@@ -48,14 +41,16 @@ def test_solar_cannot_change_dispatch():
     StorageSpec(100, 100, 1000, .9, 1),
 ])
 def test_custom_storage_limits(spec):
-    times, demand, supply, solar, _ = synthetic_run()
-    result = optimize_storage(times, demand, supply, solar, spec)
+    times, demand, supply, _ = synthetic_run()
+    result = optimize_storage(times, demand, supply, spec, sensitivity=False)
     assert result.validation["passed"]
     assert result.validation["checks"]["simultaneous_charge_discharge_gw"] < 1e-7
     assert max(x["equivalent_cycles"] for x in result.daily_performance) <= spec.max_cycles_per_accounting_day + 2e-6
+    assert result.benchmark["floor_shortfall_gw"] == 0
 
 
-@pytest.mark.parametrize("field", ["charge_power_gw", "discharge_power_gw", "energy_gwh", "rte", "max_cycles_per_accounting_day"])
+@pytest.mark.parametrize("field", ["charge_power_gw", "discharge_power_gw", "energy_gwh", "rte",
+                                   "max_cycles_per_accounting_day", "initial_soc_fraction"])
 @pytest.mark.parametrize("value", [float("nan"), float("inf")])
 def test_nonfinite_assumptions_rejected(field, value):
     with pytest.raises(ValueError, match="finite"):
@@ -71,40 +66,45 @@ def test_public_synthetic_month_full_hourly_regression():
     assert validated.timestamps[0] == datetime(2031, 4, 1)
     assert validated.timestamps[-1] == datetime(2031, 4, 30, 23)
 
-    spec = StorageSpec(40, 40, 200, .85, 1)
-    result = optimize_storage(
-        validated.timestamps, validated.demand, validated.supply, validated.solar, spec
-    )
+    spec = StorageSpec(40, 40, 200, .85, 1, initial_soc_fraction=.5, final_soc_fraction=.5)
+    result = optimize_storage(validated.timestamps, validated.demand, validated.supply, spec)
 
     def rounded_hash(values):
         payload = np.round(np.asarray(values, dtype="<f8"), 6).tobytes()
         return hashlib.sha256(payload).hexdigest()
 
-    assert rounded_hash(result.charge) == "2787a2eadf45e16a979f8bb29937fd209221ad780456c488776652b1babfed8a"
-    assert rounded_hash(result.discharge) == "e178de1ceb66ef9821028d0caa5fe228ad7329c240811659de254c332480564a"
-    assert rounded_hash(result.soc_end) == "4f5fe2625d2c0ba212a1e33635489715d28adfeb5e45762d5f0b1753ea1aa4bf"
-    assert rounded_hash(result.residual_gap) == "b0719663495a42fd6b3c9352fad0f46663ce1629878b30208f8aa449a20cf398"
+    assert rounded_hash(result.charge) == "b36ed31bb3e543b73ffbf3104d5be8bd6e65536d8a6fa19f75f619108b7ebfcf"
+    assert rounded_hash(result.discharge) == "0b02f2fb7bf01477e0f623607b939a58130945384e292dd7086c3445f380febe"
+    assert rounded_hash(result.soc_end) == "2f5c5be9c173b6f379371dc5e24b28c90fe91243230d3b31d070663924dca631"
+    assert rounded_hash(result.residual_gap) == "4486dad42dcd2d2696478224db85954af2fe0e978ed995e1bf72648e0d28e7a7"
 
     assert result.validation["passed"]
     assert result.summary["shortage_hours_before"] == 378
     assert result.summary["shortage_hours_after"] == 378
-    assert abs(result.summary["shortage_energy_after_gwh"] - 5655.532282146026) < 2e-6
-    assert abs(result.summary["equivalent_cycles"] - 29.999999997179785) < 2e-6
+    assert abs(result.summary["shortage_energy_after_gwh"] - 5747.727726721794) < 2e-6
+    assert abs(result.summary["equivalent_cycles"] - 29.499999997153008) < 2e-6
     assert result.validation["checks"]["simultaneous_charge_discharge_gw"] == 0
+    assert result.benchmark["floor_shortfall_gw"] == 0
+    assert result.benchmark["excess_shortage_gwh"] == 0
+    assert result.limits["most_effective_increase"] == "Energy capacity"
 
-    # Verify the complete downloadable workbook, including blank optional Solar.
+    # Verify the complete downloadable workbook.
     workbook = load_workbook(io.BytesIO(build_results_workbook(validated, spec, result)))
     assert workbook.sheetnames == ["Summary", "Hourly Results"]
     hourly = workbook["Hourly Results"]
-    assert hourly.max_row == 721 and hourly.max_column == 12
-    assert hourly.tables["HourlyStorageResults"].ref == "A1:L721"
+    assert hourly.max_row == 721 and hourly.max_column == 11
+    assert hourly.tables["HourlyStorageResults"].ref == "A1:K721"
     rows = list(hourly.iter_rows(min_row=2, values_only=True))
     assert [row[0] for row in rows] == validated.timestamps
-    assert [row[11] for row in rows] == result.accounting_days
-    assert all(row[3] is None for row in rows)
-    np.testing.assert_allclose([row[8] for row in rows], result.adjusted_supply, atol=1e-10)
-    np.testing.assert_allclose([row[9] for row in rows], result.residual_gap, atol=1e-10)
+    assert [row[10] for row in rows] == result.accounting_days
+    np.testing.assert_allclose([row[7] for row in rows], result.adjusted_supply, atol=1e-10)
+    np.testing.assert_allclose([row[8] for row in rows], result.residual_gap, atol=1e-10)
+    np.testing.assert_allclose([row[9] for row in rows], result.soc_end, atol=1e-10)
     assert not any(cell.data_type in ("e", "f") for sheet in workbook for row in sheet for cell in row)
-    assert workbook["Summary"]["C19"].value == 378
+    summary = {row[0]: row[1:] for row in workbook["Summary"].iter_rows(values_only=True) if row[0]}
+    assert summary["Shortage hours"][:2] == (378, 378)
+    assert summary["Initial SOC"][0] == .5
+    assert summary["Charging allowed"][0] == "Surplus hours only"
+    assert summary["Most effective +10% increase"][0] == "Energy capacity"
     assert hashlib.sha256(path.read_bytes()).hexdigest() == hashlib.sha256(source).hexdigest()
     workbook.close()
