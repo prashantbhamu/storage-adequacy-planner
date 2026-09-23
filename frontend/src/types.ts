@@ -10,14 +10,6 @@ export type StorageInputs = {
   max_soc_percent: string;
 };
 
-export type Preview = {
-  filename: string;
-  sheet_name: string | null;
-  row_count: number;
-  columns: string[];
-  sample: Record<string, string | null>[];
-};
-
 export type Validation = {
   valid: boolean;
   period_type: "month" | "financial_year";
@@ -26,6 +18,15 @@ export type Validation = {
   start: string;
   end: string;
   checks: Record<string, boolean>;
+  raw: {
+    minimum_gap_gw: number;
+    maximum_gap_gw: number;
+    shortage_energy_gwh: number;
+    shortage_hours: number;
+    surplus_energy_gwh: number;
+    peak_demand_gw: number;
+  };
+  daily_minimum_gap_gw: Array<{ day: string; gap_gw: number }>;
 };
 
 export type HourlyResult = {
@@ -53,16 +54,35 @@ export type DailyResult = {
   equivalent_cycles: number;
 };
 
+export type LimitKey = "discharge_power" | "stored_energy" | "daily_cycle_limit" | "energy_rationed";
+
+export type SensitivityRow = {
+  parameter: string;
+  unit: string;
+  from: number;
+  to: number;
+  floor_change_gw: number;
+  shortage_change_gwh: number;
+};
+
 export type RunResult = {
   run_id: string;
-  period: {
-    type: string;
-    label: string;
-    hours: number;
-    start: string;
-    end: string;
+  period: { type: string; label: string; hours: number; start: string; end: string };
+  storage: {
+    charge_power_gw: number;
+    discharge_power_gw: number;
+    energy_gwh: number;
+    rte: number;
+    max_cycles_per_accounting_day: number;
+    initial_soc_fraction: number;
+    final_soc_fraction: number;
+    min_soc_fraction: number;
+    max_soc_fraction: number;
+    charge_from_surplus_only: boolean;
+    daily_internal_throughput_cap_gwh: number;
+    soc_min_gwh: number;
+    soc_max_gwh: number;
   };
-  storage: Record<string, number>;
   summary: Record<string, number>;
   validation: {
     passed: boolean;
@@ -70,22 +90,54 @@ export type RunResult = {
     checks: Record<string, number>;
     diagnostics: Record<string, number>;
   };
-  benchmark: Record<string, number>;
+  benchmark: {
+    perfect_foresight_floor_gw: number;
+    perfect_foresight_shortage_gwh: number;
+    rolling_floor_gw: number;
+    rolling_shortage_gwh: number;
+    floor_shortfall_gw: number;
+    excess_shortage_gwh: number;
+  };
   limits: {
-    labels: Record<string, string>;
-    shortage_hours: Record<string, number>;
-    shortage_energy_gwh: Record<string, number>;
-    floor_hour: { timestamp: string; residual_gap_gw: number; limit: string };
+    labels: Record<LimitKey, string>;
+    shortage_hours: Record<LimitKey, number>;
+    shortage_energy_gwh: Record<LimitKey, number>;
+    floor_hour: { timestamp: string; residual_gap_gw: number; limit: LimitKey };
     most_effective_increase: string | null;
   };
-  sensitivity: Array<{
-    parameter: string;
-    unit: string;
-    from: number;
-    to: number;
-    floor_change_gw: number;
-    shortage_change_gwh: number;
-  }>;
+  sensitivity: SensitivityRow[];
   daily_performance: DailyResult[];
   hourly: HourlyResult[];
+};
+
+export type JobStatus = {
+  state: "running" | "done" | "error";
+  stage: "queued" | "benchmark" | "horizons" | "sensitivity";
+  done: number;
+  total: number;
+  elapsed_seconds: number;
+  error: string | null;
+  result: RunResult | null;
+};
+
+export type SizingMode = "energy" | "power" | "duration";
+
+export type SizingResult = {
+  mode: SizingMode;
+  description: string;
+  target_floor_gw: number;
+  duration_hours: number | null;
+  charge_power_gw: number;
+  discharge_power_gw: number;
+  energy_gwh: number;
+  raw_floor_gw: number;
+  check_floor_gw: number;
+  check_shortage_gwh: number;
+};
+
+export type SocSuggestion = {
+  soc_percent: number;
+  soc_gwh: number;
+  floor_gw: number;
+  shortage_gwh: number;
 };

@@ -161,3 +161,55 @@ def test_suggest_and_size_endpoints():
     assert sized.status_code == 200, sized.text
     assert sized.json()["energy_gwh"] > 0
     assert sized.json()["check_floor_gw"] >= -35 - 1e-6
+
+
+def test_background_job_reports_progress_and_result():
+    import time
+
+    client = TestClient(app)
+    files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
+    settings = {"charge_power_gw": 40, "discharge_power_gw": 40, "energy_gwh": 200,
+                "rte_percent": 85, "max_cycles_per_accounting_day": 1,
+                "initial_soc_percent": 50, "final_soc_percent": 50}
+    started = client.post("/api/jobs", files=files, data={"settings": json.dumps(settings)})
+    assert started.status_code == 200, started.text
+    job_id = started.json()["job_id"]
+    stages = set()
+    for _ in range(600):
+        status = client.get(f"/api/jobs/{job_id}").json()
+        stages.add(status["stage"])
+        if status["state"] != "running":
+            break
+        time.sleep(0.1)
+    assert status["state"] == "done", status["error"]
+    assert status["result"]["validation"]["passed"]
+    assert status["done"] == status["total"]
+    assert stages & {"benchmark", "horizons", "sensitivity"}
+    assert client.get(f"/api/download/{status['result']['run_id']}").status_code == 200
+
+
+def test_background_job_rejects_bad_settings_immediately():
+    files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
+    response = TestClient(app).post("/api/jobs", files=files, data={"settings": json.dumps({"energy_gwh": 1})})
+    assert response.status_code == 400
+
+
+def test_validation_reports_raw_gap_statistics(april):
+    response = TestClient(app).post("/api/validate", files={"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")})
+    raw = response.json()["raw"]
+    gap = april.supply - april.demand
+    assert raw["minimum_gap_gw"] == pytest.approx(gap.min())
+    assert raw["shortage_hours"] == 378
+    assert raw["shortage_energy_gwh"] == pytest.approx(np.maximum(-gap, 0).sum())
+
+
+def test_example_year_download_and_daily_preview():
+    client = TestClient(app)
+    example = client.get("/api/example")
+    assert example.status_code == 200
+    assert example.content == (APP_ROOT / "examples/synthetic_fy2029_30.csv").read_bytes()
+    validation = client.post("/api/validate", files={"file": ("example.csv", example.content, "text/csv")}).json()
+    assert validation["period_label"] == "FY 2029-30"
+    assert validation["raw"]["shortage_hours"] > 1000
+    days = validation["daily_minimum_gap_gw"]
+    assert days[0]["day"] == "2029-03-31" and len(days) == 366

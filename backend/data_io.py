@@ -222,6 +222,7 @@ def validate_uploaded_table(
 
 
 def validation_response(validated: ValidatedInput) -> dict:
+    gap = validated.supply - validated.demand
     return {
         "valid": True,
         "period_type": validated.period_type,
@@ -235,4 +236,22 @@ def validation_response(validated: ValidatedInput) -> dict:
             "no_missing_timestamps": True,
             "one_scenario": True,
         },
+        "raw": {
+            "minimum_gap_gw": float(gap.min()),
+            "maximum_gap_gw": float(gap.max()),
+            "shortage_energy_gwh": float(np.maximum(-gap, 0.0).sum()),
+            "shortage_hours": int((gap < -1e-6).sum()),
+            "surplus_energy_gwh": float(np.maximum(gap, 0.0).sum()),
+            "peak_demand_gw": float(validated.demand.max()),
+        },
+        "daily_minimum_gap_gw": _daily_minimum(validated.timestamps, gap),
     }
+
+
+def _daily_minimum(timestamps: list[datetime], gap: np.ndarray) -> list[dict]:
+    """Lowest raw gap per 06:00-to-06:00 accounting day, for an upload preview."""
+    lowest: dict[str, float] = {}
+    for timestamp, value in zip(timestamps, gap):
+        day = (timestamp - timedelta(hours=6)).date().isoformat()
+        lowest[day] = min(lowest.get(day, float("inf")), float(value))
+    return [{"day": day, "gap_gw": value} for day, value in lowest.items()]

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 import uuid
 from collections import OrderedDict
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .data_io import preview_table, validate_uploaded_table, validation_response
@@ -25,9 +27,11 @@ from .sizing import size_storage
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = APP_ROOT / "frontend" / "dist"
+EXAMPLE_FILE = APP_ROOT / "examples" / "synthetic_fy2029_30.csv"
 MAX_STORED_EXPORTS = 5
+MAX_STORED_JOBS = 5
 
-app = FastAPI(title="Storage Dispatch Optimiser", version=VERSION)
+app = FastAPI(title="Storage Adequacy Planner", version=VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -37,6 +41,8 @@ app.add_middleware(
 )
 
 _exports: OrderedDict[str, tuple[str, bytes]] = OrderedDict()
+_jobs: OrderedDict[str, dict] = OrderedDict()
+_jobs_lock = threading.Lock()
 
 
 def _error(error: Exception) -> HTTPException:
@@ -96,6 +102,13 @@ def health() -> dict:
         "horizon_hours": 48,
         "commit_hours": 24,
     }
+
+
+@app.get("/api/example")
+def example() -> FileResponse:
+    """The public synthetic financial year, for trying the tool without private data."""
+    return FileResponse(EXAMPLE_FILE, media_type="text/csv", filename=EXAMPLE_FILE.name,
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/preview")
@@ -177,6 +190,28 @@ def _json_safe_result(run_id: str, validated, spec: StorageSpec, result) -> dict
     }
 
 
+def _run_optimization(content: bytes, filename: str, mapping: str | None,
+                      settings: str, progress=None) -> dict:
+    parsed_mapping = json.loads(mapping) if mapping else None
+    spec = _spec_from_settings(json.loads(settings))
+    validated = validate_uploaded_table(content, filename, parsed_mapping)
+    result = optimize_storage(
+        validated.timestamps,
+        validated.demand,
+        validated.supply,
+        spec,
+        progress=progress,
+    )
+    run_id = uuid.uuid4().hex
+    export = build_results_workbook(validated, spec, result)
+    export_name = f"storage_adequacy_planner_{validated.period_label.replace(' ', '_')}.xlsx"
+    with _jobs_lock:
+        _exports[run_id] = (export_name, export)
+        while len(_exports) > MAX_STORED_EXPORTS:
+            _exports.popitem(last=False)
+    return _json_safe_result(run_id, validated, spec, result)
+
+
 @app.post("/api/optimize")
 async def optimize(
     file: UploadFile = File(...),
@@ -184,26 +219,66 @@ async def optimize(
     settings: str = Form(...),
 ) -> dict:
     try:
-        parsed_mapping = json.loads(mapping) if mapping else None
-        spec = _spec_from_settings(json.loads(settings))
-        validated = validate_uploaded_table(
-            await _file_bytes(file), file.filename or "upload", parsed_mapping
+        return _run_optimization(
+            await _file_bytes(file), file.filename or "upload", mapping, settings
         )
-        result = optimize_storage(
-            validated.timestamps,
-            validated.demand,
-            validated.supply,
-            spec,
-        )
-        run_id = uuid.uuid4().hex
-        export = build_results_workbook(validated, spec, result)
-        filename = f"storage_dispatch_optimiser_{validated.period_label.replace(' ', '_')}.xlsx"
-        _exports[run_id] = (filename, export)
-        while len(_exports) > MAX_STORED_EXPORTS:
-            _exports.popitem(last=False)
-        return _json_safe_result(run_id, validated, spec, result)
     except Exception as error:
         raise _error(error) from error
+
+
+@app.post("/api/jobs")
+async def start_job(
+    file: UploadFile = File(...),
+    mapping: str | None = Form(None),
+    settings: str = Form(...),
+) -> dict:
+    """Start an optimisation in the background; poll ``/api/jobs/{id}``."""
+    content = await _file_bytes(file)
+    filename = file.filename or "upload"
+    try:
+        # Fail fast on bad settings or input before starting a thread.
+        _spec_from_settings(json.loads(settings))
+        validate_uploaded_table(content, filename, json.loads(mapping) if mapping else None)
+    except Exception as error:
+        raise _error(error) from error
+
+    job_id = uuid.uuid4().hex
+    job = {"state": "running", "stage": "queued", "done": 0, "total": 1,
+           "started": time.time(), "result": None, "error": None}
+    with _jobs_lock:
+        _jobs[job_id] = job
+        while len(_jobs) > MAX_STORED_JOBS:
+            _jobs.popitem(last=False)
+
+    def progress(stage: str, done: int, total: int) -> None:
+        job.update(stage=stage, done=done, total=total)
+
+    def work() -> None:
+        try:
+            job["result"] = _run_optimization(content, filename, mapping, settings, progress)
+            job["state"] = "done"
+        except Exception as error:  # reported to the client, not raised
+            job["error"] = str(error)
+            job["state"] = "error"
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/jobs/{job_id}")
+def job_status(job_id: str) -> dict:
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="This run is no longer available.")
+    return {
+        "state": job["state"],
+        "stage": job["stage"],
+        "done": job["done"],
+        "total": job["total"],
+        "elapsed_seconds": time.time() - job["started"],
+        "error": job["error"],
+        "result": job["result"] if job["state"] == "done" else None,
+    }
 
 
 @app.post("/api/suggest-soc")
