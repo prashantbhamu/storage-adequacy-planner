@@ -149,7 +149,6 @@ export function EmptyState({ onExample, loadingExample }: { onExample: () => voi
       <button type="button" className="secondary-button" onClick={onExample} disabled={loadingExample}>
         <FlaskConical size={15} aria-hidden="true" /> {loadingExample ? "Loading…" : "Try with example data"}
       </button>
-      <p className="empty-foot">Runs entirely on this computer. Files are processed in memory and never leave it.</p>
     </section>
   );
 }

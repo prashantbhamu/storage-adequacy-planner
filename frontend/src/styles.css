@@ -647,7 +647,6 @@ tbody tr.is-selected { background: var(--accent-soft); }
 }
 .empty-steps span { color: var(--muted); font-size: 12px; }
 .empty-steps strong { display: block; color: var(--text); font-size: 13px; }
-.empty-foot { margin-top: 16px; color: var(--faint); font-size: 12px; }
 
 .ready h2 { margin-top: 6px; font-size: 20px; font-weight: 600; }
 .ready > p { margin-top: 16px; color: var(--muted); }
