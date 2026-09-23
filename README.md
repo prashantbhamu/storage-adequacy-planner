@@ -8,17 +8,24 @@ storage resource can reshape an hourly supply–demand residual profile.
 ## What it does
 
 The tool accepts one complete calendar month or April–March financial year of
-hourly demand and available supply. Users can set charge power, discharge power,
-energy capacity, round-trip efficiency and a daily throughput limit. Results
-include before/after headroom, shortage energy and hours, storage dispatch,
-state of charge, daily cycle use, constraint checks and a downloadable workbook.
+hourly demand and available supply. Users set charge power, discharge power,
+energy capacity, round-trip efficiency, a daily throughput limit, the initial
+and final state of charge (SOC), an optional SOC operating range and whether
+charging is limited to surplus hours. Results include before/after headroom,
+shortage energy and hours, storage dispatch, SOC, daily cycle use, constraint
+checks, a perfect-foresight benchmark, what limits the result, a +10%
+sensitivity on each storage limit and a downloadable workbook.
+
+The tool can also size storage: the minimum energy capacity, power, or power
+at a fixed duration that holds the residual gap at or above a target in every
+hour.
 
 This is a **floor-lifting** model, not a merchant revenue optimiser. Its ordered
 objectives are:
 
 1. maximise the minimum storage-adjusted residual gap;
 2. minimise remaining shortage energy without sacrificing that floor;
-3. preserve a soft terminal-SOC value for the next commitment window;
+3. approach the perfect-foresight SOC at the end of each window (a soft target);
 4. progressively level the remaining residual gaps (leximin); and
 5. minimise unnecessary throughput.
 
@@ -26,17 +33,22 @@ objectives are:
 
 - One combined storage lump.
 - Linear programming with SciPy's bundled HiGHS solver.
-- 48-hour rolling horizon with the first 24 hours committed.
-- Continuous state of charge (SOC), fixed at zero only at the study start and end.
+- 48-hour rolling horizon with the first 24 hours committed. Each window's
+  soft terminal SOC target follows the SOC trajectory of a whole-period
+  perfect-foresight solve, and the result is reported against that optimum.
+- Continuous SOC that starts and ends at user-defined levels (% of energy
+  capacity) and stays within an optional minimum/maximum operating range.
+  A cyclic level (start = end) can be suggested for the entered storage.
 - Separate user-defined charge/discharge power limits and energy capacity.
 - Symmetric one-way efficiency equal to `sqrt(round-trip efficiency)`.
 - No simultaneous charge and discharge.
+- By default storage charges only from surplus (supply above demand), so it
+  never deepens a shortage; charging in any hour can be allowed instead.
 - Maximum internal charging and discharging throughput per 06:00–06:00
-  accounting day; the boundary does not reset SOC.
+  accounting day, prorated for partial days at the study start and end; the
+  boundary does not reset SOC.
 
-The optimiser uses demand and available supply only. Solar is not an objective
-signal or tie-breaker. If a compatible Solar column exists, it is retained only
-as an optional reference in the exported workbook.
+The optimiser uses demand and available supply only.
 
 ## Input format
 
@@ -51,6 +63,22 @@ Upload `.csv` or `.xlsx` with these columns:
 The series must cover exactly one calendar month or one April–March financial
 year, with no duplicate, missing or irregular hours. Common aliases are detected
 automatically; missing or ambiguous columns fail with an explicit message.
+Other columns (for example an old Solar column) are ignored.
+
+## API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/validate` | Check the uploaded file and detect the period |
+| `POST /api/optimize` | Run the dispatch model; returns hourly results, summary, benchmark, limits and sensitivity |
+| `POST /api/suggest-soc` | Suggest a cyclic initial = final SOC for the entered storage |
+| `POST /api/size` | Minimum storage for a target floor (`energy`, `power` or `duration` mode) |
+| `GET /api/download/{run_id}` | Results workbook |
+
+`settings` (JSON) takes `charge_power_gw`, `discharge_power_gw`, `energy_gwh`,
+`rte_percent`, `max_cycles_per_accounting_day`, `initial_soc_percent`,
+`final_soc_percent`, and optionally `min_soc_percent` (default 0),
+`max_soc_percent` (default 100) and `charge_from_surplus_only` (default true).
 
 Generate the included non-sensitive example:
 
@@ -92,9 +120,10 @@ npm run build
 
 The public regression suite uses deterministic synthetic data. It pins all 720
 hourly charge, discharge, SOC and residual-gap values to six decimal places,
-checks objective behaviour and physical constraints, exercises three-column
-CSV/XLSX uploads, and verifies the complete downloadable workbook. No private or
-operational dataset is required.
+checks objective behaviour and physical constraints, user-defined SOC levels,
+surplus-only charging, prorated accounting days, the perfect-foresight
+benchmark, sizing minimality, three-column CSV/XLSX uploads and the complete
+downloadable workbook. No private or operational dataset is required.
 
 ## Scope and limitations
 
@@ -104,8 +133,10 @@ operational dataset is required.
   reserves, network constraints, unit commitment and degradation cost are out of
   scope.
 - Power and energy units are GW and GWh. The tool does not silently convert MW.
-- Large annual cases can take several minutes because progressive leximin solves
-  multiple LP stages within each rolling horizon.
+- A financial-year run takes roughly 30–40 seconds on a typical laptop,
+  including the perfect-foresight benchmark and sensitivity solves.
+- Sizing and sensitivity use whole-period perfect foresight; the rolling
+  dispatch is checked against it and matched it on the reference datasets.
 - Results depend on the supplied data and assumptions and should be reviewed by
   a qualified planner before use in decisions.
 

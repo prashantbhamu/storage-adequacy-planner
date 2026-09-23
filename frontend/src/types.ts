@@ -4,6 +4,10 @@ export type StorageInputs = {
   energy_gwh: string;
   rte_percent: string;
   max_cycles_per_accounting_day: string;
+  initial_soc_percent: string;
+  final_soc_percent: string;
+  min_soc_percent: string;
+  max_soc_percent: string;
 };
 
 export type Preview = {
@@ -28,7 +32,6 @@ export type HourlyResult = {
   timestamp: string;
   demand_gw: number;
   supply_gw: number;
-  solar_gw: number | null;
   raw_gap_gw: number;
   charge_gw: number;
   discharge_gw: number;
@@ -67,6 +70,22 @@ export type RunResult = {
     checks: Record<string, number>;
     diagnostics: Record<string, number>;
   };
+  benchmark: Record<string, number>;
+  limits: {
+    labels: Record<string, string>;
+    shortage_hours: Record<string, number>;
+    shortage_energy_gwh: Record<string, number>;
+    floor_hour: { timestamp: string; residual_gap_gw: number; limit: string };
+    most_effective_increase: string | null;
+  };
+  sensitivity: Array<{
+    parameter: string;
+    unit: string;
+    from: number;
+    to: number;
+    floor_change_gw: number;
+    shortage_change_gwh: number;
+  }>;
   daily_performance: DailyResult[];
   hourly: HourlyResult[];
 };

@@ -53,10 +53,8 @@ class ValidatedInput:
     timestamps: list[datetime]
     demand: np.ndarray
     supply: np.ndarray
-    solar: np.ndarray
     raw_frame: pd.DataFrame
     mapping: dict[str, str]
-    solar_provided: bool = True
 
 
 def read_uploaded_table(data: bytes, filename: str) -> tuple[pd.DataFrame, str | None]:
@@ -210,24 +208,6 @@ def validate_uploaded_table(
     if np.any(arrays["supply"] < 0):
         raise ValueError("Available-supply values cannot be negative.")
 
-    # Solar is no longer an input requirement or a solver signal. Retain a
-    # valid legacy reference column when present; unrelated/invalid extras must
-    # not block an otherwise valid upload. Missing reference data is exported
-    # as blank, never as an observed zero-generation series.
-    solar_columns = [column for column in frame.columns if _normalise_header(column)
-                     in {"solar", "solargw", "solargeneration", "solargenerationgw"}]
-    solar_column = mapping.get("solar") or (solar_columns[0] if len(solar_columns) == 1 else None)
-    solar = np.zeros(len(frame), dtype=float)
-    solar_provided = False
-    if solar_column in frame.columns and solar_column not in selected:
-        reference = pd.to_numeric(frame[solar_column], errors="coerce").to_numpy(dtype=float)
-        if np.all(np.isfinite(reference)) and np.all(reference >= 0):
-            solar = reference
-            solar_provided = True
-            mapping["solar"] = solar_column
-    if not solar_provided:
-        mapping.pop("solar", None)
-
     return ValidatedInput(
         filename=filename,
         sheet_name=sheet_name,
@@ -236,10 +216,8 @@ def validate_uploaded_table(
         timestamps=[timestamp.to_pydatetime() for timestamp in timestamps],
         demand=arrays["demand"],
         supply=arrays["supply"],
-        solar=solar,
         raw_frame=frame,
-        mapping=mapping,
-        solar_provided=solar_provided,
+        mapping={field: mapping[field] for field in required},
     )
 
 
