@@ -25,8 +25,10 @@ with evening and night deficits in red:
 
 ![Heatmap of supply minus demand for every hour of the year](docs/heatmap.png)
 
-Hourly detail for one day, two days or a week, midnight to midnight, showing the
-gap before and after storage, charging and discharging, and stored energy:
+Hourly detail for one day, two days or a week, midnight to midnight: demand and
+available supply before and after storage (with charging, discharging and any
+remaining shortage shaded), storage operation and stored energy. A toggle
+switches the top chart to the supply − demand margin:
 
 ![Two days of supply minus demand, storage operation and stored energy](docs/hourly-detail.png)
 
