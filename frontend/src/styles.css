@@ -292,6 +292,7 @@ button:disabled { cursor: not-allowed; }
 .data-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 12px; }
 .data-facts dt { color: var(--muted); font-size: 11.5px; }
 .data-facts dd { font-weight: 600; font-size: 13px; }
+.data-facts dd small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 400; }
 
 .sparkline { margin-top: 12px; }
 .sparkline svg { display: block; width: 100%; height: 40px; }

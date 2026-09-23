@@ -12,33 +12,34 @@ from .data_io import ValidatedInput
 from .optimizer import METHOD_OBJECTIVES, VERSION, OptimizationResult, StorageSpec, storage_spec_dict
 
 
-NAVY = "0B2B50"
-TEAL = "078C82"
-PALE_TEAL = "E9F7F5"
-PALE_BLUE = "EEF5FA"
-SLATE = "5D6B7A"
-LIGHT_BORDER = "C9D6E2"
+# Palette shared with the web app (styles.css light theme).
+INK = "111827"
+ACCENT = "0E7C6B"
+ACCENT_STRONG = "0A6557"
+ACCENT_SOFT = "E2F3EE"
+MUTED = "5F6B7A"
 WHITE = "FFFFFF"
+GAP_FORMAT = "0.000000;[Red]-0.000000"
 
 
 def _section_title(sheet, row: int, text: str, last_column: int = 6) -> None:
     cell = sheet.cell(row, 1, text)
-    cell.font = Font(name="Aptos Display", size=14, bold=True, color=NAVY)
-    cell.fill = PatternFill("solid", fgColor=PALE_BLUE)
+    cell.font = Font(name="Aptos Display", size=13, bold=True, color=ACCENT_STRONG)
+    cell.fill = PatternFill("solid", fgColor=ACCENT_SOFT)
     cell.alignment = Alignment(vertical="center")
     sheet.merge_cells(start_row=row, start_column=1, end_row=row, end_column=last_column)
 
 
 def _label(cell, text: str) -> None:
     cell.value = text
-    cell.font = Font(name="Aptos", size=10, bold=True, color=NAVY)
+    cell.font = Font(name="Aptos", size=10, bold=True, color=INK)
 
 
 def _header_row(sheet, row: int, headers: tuple[str, ...]) -> None:
     for column, value in enumerate(headers, start=1):
         cell = sheet.cell(row, column, value)
         cell.font = Font(name="Aptos", size=10, bold=True, color=WHITE)
-        cell.fill = PatternFill("solid", fgColor=TEAL)
+        cell.fill = PatternFill("solid", fgColor=ACCENT)
 
 
 def _key_values(sheet, row: int, rows: list[tuple], number_format: str = "0.000") -> int:
@@ -67,7 +68,7 @@ def _style_summary_sheet(
     sheet.merge_cells("A1:F1")
     sheet["A1"] = "Storage Adequacy Planner"
     sheet["A1"].font = Font(name="Aptos Display", size=20, bold=True, color=WHITE)
-    sheet["A1"].fill = PatternFill("solid", fgColor=NAVY)
+    sheet["A1"].fill = PatternFill("solid", fgColor=ACCENT)
     sheet["A1"].alignment = Alignment(vertical="center")
     sheet.row_dimensions[1].height = 34
     sheet.merge_cells("A2:F2")
@@ -75,7 +76,7 @@ def _style_summary_sheet(
         f"{validated.period_label} · 48 h look-ahead · 24 h commitment · "
         "anchored to the perfect-foresight optimum"
     )
-    sheet["A2"].font = Font(name="Aptos", size=10, color=SLATE)
+    sheet["A2"].font = Font(name="Aptos", size=10, color=MUTED)
 
     row = 4
     _section_title(sheet, row, "Run information")
@@ -118,8 +119,12 @@ def _style_summary_sheet(
     ):
         for column, value in enumerate((label, before, after, after - before, unit, interpretation), start=1):
             cell = sheet.cell(row, column, value)
-            if column in (2, 3, 4):
-                cell.number_format = "0.000"
+            if column in (2, 3):
+                cell.number_format = "0.000;[Red]-0.000"
+            if column == 4:
+                cell.number_format = "+0.000;-0.000;0.000"
+            if column == 3:
+                cell.font = Font(name="Aptos", size=10, bold=True, color=ACCENT_STRONG)
         row += 1
     row += 1
 
@@ -245,8 +250,9 @@ def _style_hourly_sheet(workbook: Workbook, result: OptimizationResult) -> None:
     for column, value in enumerate(HOURLY_HEADERS, start=1):
         cell = sheet.cell(1, column, value)
         cell.font = Font(name="Aptos", bold=True, color=WHITE)
-        cell.fill = PatternFill("solid", fgColor=NAVY)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.fill = PatternFill("solid", fgColor=ACCENT)
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    sheet.row_dimensions[1].height = 32
 
     for index, timestamp in enumerate(result.timestamps, start=2):
         source = index - 2
@@ -268,11 +274,13 @@ def _style_hourly_sheet(workbook: Workbook, result: OptimizationResult) -> None:
         sheet.cell(index, 1).number_format = "yyyy-mm-dd hh:mm"
         for column in range(2, 11):
             sheet.cell(index, column).number_format = "0.000000"
+        for column in (4, 9):  # raw and residual gap: shortages in red
+            sheet.cell(index, column).number_format = GAP_FORMAT
 
     last_column = get_column_letter(len(HOURLY_HEADERS))
     table = Table(displayName="HourlyStorageResults", ref=f"A1:{last_column}{len(result.timestamps) + 1}")
     table.tableStyleInfo = TableStyleInfo(
-        name="TableStyleMedium2",
+        name="TableStyleLight1",
         showFirstColumn=False,
         showLastColumn=False,
         showRowStripes=True,
@@ -305,7 +313,7 @@ def build_results_workbook(
         for row in sheet.iter_rows():
             for cell in row:
                 if cell.row > 1 and cell.font == Font():
-                    cell.font = Font(name="Aptos", size=10, color=NAVY)
+                    cell.font = Font(name="Aptos", size=10, color=INK)
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()

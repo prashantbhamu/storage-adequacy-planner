@@ -34,11 +34,16 @@ function useReducedMotion() {
   return reduced;
 }
 
-/** Round a scale limit outwards to a readable step. */
-function niceLimit(value: number, direction: 1 | -1) {
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(Math.abs(value), 1)));
-  const step = magnitude / 2;
-  return direction > 0 ? Math.ceil(value / step) * step : Math.floor(value / step) * step;
+/** A readable scale from ``low`` to ``high`` whose ticks always include zero. */
+function niceScale(low: number, high: number) {
+  const rough = Math.max(high - low, 1) / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= rough) ?? 10 * magnitude;
+  const start = Math.floor(low / step) * step;
+  const end = Math.ceil(high / step) * step;
+  const ticks: number[] = [];
+  for (let tick = start; tick <= end + step / 2; tick += step) ticks.push(Math.round(tick * 1e6) / 1e6);
+  return { domain: [start, end] as [number, number], ticks };
 }
 
 function tickLabel(row: HourlyResult | undefined, days: WindowDays) {
@@ -84,9 +89,10 @@ function HourTooltip({ active, label, rows, kind }: {
  * a given window length, so stepping between dates morphs the lines, bands
  * and bars from one period to the next instead of redrawing them.
  */
-const WindowCharts = memo(function WindowCharts({ rows, days, result, gapDomain }: {
-  rows: HourlyResult[]; days: WindowDays; result: RunResult; gapDomain: [number, number];
+const WindowCharts = memo(function WindowCharts({ rows, days, result, gapScale }: {
+  rows: HourlyResult[]; days: WindowDays; result: RunResult; gapScale: { domain: [number, number]; ticks: number[] };
 }) {
+  const gapDomain = gapScale.domain;
   const reduced = useReducedMotion();
   const narrow = useMedia("(max-width: 640px)");
   const residual = useMemo(() => residualPoints(rows), [rows]);
@@ -132,7 +138,7 @@ const WindowCharts = memo(function WindowCharts({ rows, days, result, gapDomain 
             {gapDomain[0] < 0 ? <ReferenceArea y1={gapDomain[0]} y2={0} fill="var(--c-deficit)" fillOpacity={0.06} /> : null}
             {dayLines}
             <XAxis {...xAxis} />
-            <YAxis {...yAxis} domain={gapDomain} allowDataOverflow />
+            <YAxis {...yAxis} domain={gapDomain} ticks={gapScale.ticks} allowDataOverflow />
             <ReferenceLine y={0} stroke="var(--axis-strong)" />
             <Area type="linear" dataKey="chargingBand" fill="var(--c-charge)" fillOpacity={0.22} stroke="none" activeDot={false} {...motion} />
             <Area type="linear" dataKey="dischargingBand" fill="var(--c-discharge)" fillOpacity={0.26} stroke="none" activeDot={false} {...motion} />
@@ -197,14 +203,14 @@ export function DayDetail({ result, dates, start, days, onStart, onDays }: {
 }) {
   const rows = useMemo(() => windowRows(result.hourly, start, days), [result.hourly, start, days]);
   const tightest = useMemo(() => tightestDate(result.hourly), [result.hourly]);
-  const gapDomain = useMemo<[number, number]>(() => {
+  const gapScale = useMemo(() => {
     let low = 0;
     let high = 0;
     for (const row of result.hourly) {
       low = Math.min(low, row.raw_gap_gw, row.residual_gap_gw);
       high = Math.max(high, row.raw_gap_gw, row.residual_gap_gw);
     }
-    return [niceLimit(low, -1), niceLimit(high, 1)];
+    return niceScale(low, high);
   }, [result.hourly]);
   const index = dates.indexOf(start);
   const last = Math.max(0, dates.length - days);
@@ -258,7 +264,7 @@ export function DayDetail({ result, dates, start, days, onStart, onDays }: {
         <div><dt>Short hours</dt><dd><span className="was">{stats.hoursBefore}</span> → <b>{stats.hoursAfter}</b></dd></div>
         <div><dt>Cycles</dt><dd><b>{num(stats.cycles, 2)}</b></dd></div>
       </dl>
-      <WindowCharts rows={rows} days={days} result={result} gapDomain={gapDomain} />
+      <WindowCharts rows={rows} days={days} result={result} gapScale={gapScale} />
     </section>
   );
 }
