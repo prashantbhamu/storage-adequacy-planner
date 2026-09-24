@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import time
 import uuid
 from collections import OrderedDict
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -25,11 +28,12 @@ from .optimizer import (
 from .sizing import size_storage
 
 
-APP_ROOT = Path(__file__).resolve().parents[1]
+# In the packaged Windows app, bundled files live in PyInstaller's unpack folder.
+APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 DIST_DIR = APP_ROOT / "frontend" / "dist"
 EXAMPLE_FILE = APP_ROOT / "examples" / "synthetic_fy2029_30.csv"
-MAX_STORED_EXPORTS = 5
-MAX_STORED_JOBS = 5
+MAX_STORED_EXPORTS = 20
+MAX_STORED_JOBS = 20
 
 app = FastAPI(title="Storage Adequacy Planner", version=VERSION)
 app.add_middleware(
@@ -43,6 +47,44 @@ app.add_middleware(
 _exports: OrderedDict[str, tuple[str, bytes]] = OrderedDict()
 _jobs: OrderedDict[str, dict] = OrderedDict()
 _jobs_lock = threading.Lock()
+
+# One heavy calculation at a time, off the request thread, so the interface stays
+# responsive while a full-year run keeps a CPU busy; later requests wait in order.
+_compute = threading.Lock()
+_queue: list[str] = []
+
+
+@contextmanager
+def _compute_turn(ticket: str, on_start=None):
+    with _jobs_lock:
+        _queue.append(ticket)
+    try:
+        with _compute:
+            with _jobs_lock:
+                _queue.remove(ticket)
+            if on_start is not None:
+                on_start()
+            yield
+    finally:
+        with _jobs_lock:
+            if ticket in _queue:
+                _queue.remove(ticket)
+
+
+def _runs_ahead(ticket: str) -> int:
+    """Calculations that will finish before this one starts (including the running one)."""
+    with _jobs_lock:
+        if ticket not in _queue:
+            return 0
+        return _queue.index(ticket) + (1 if _compute.locked() else 0)
+
+
+def _in_turn(work):
+    """Run ``work`` in a worker thread once it is this request's turn to compute."""
+    def run():
+        with _compute_turn(uuid.uuid4().hex):
+            return work()
+    return run_in_threadpool(run)
 
 
 def _error(error: Exception) -> HTTPException:
@@ -218,10 +260,11 @@ async def optimize(
     mapping: str | None = Form(None),
     settings: str = Form(...),
 ) -> dict:
+    content = await _file_bytes(file)
     try:
-        return _run_optimization(
-            await _file_bytes(file), file.filename or "upload", mapping, settings
-        )
+        return await _in_turn(lambda: _run_optimization(
+            content, file.filename or "upload", mapping, settings
+        ))
     except Exception as error:
         raise _error(error) from error
 
@@ -255,7 +298,9 @@ async def start_job(
 
     def work() -> None:
         try:
-            job["result"] = _run_optimization(content, filename, mapping, settings, progress)
+            # The clock starts when the job's turn comes, so time estimates exclude waiting.
+            with _compute_turn(job_id, on_start=lambda: job.update(started=time.time())):
+                job["result"] = _run_optimization(content, filename, mapping, settings, progress)
             job["state"] = "done"
         except Exception as error:  # reported to the client, not raised
             job["error"] = str(error)
@@ -276,6 +321,7 @@ def job_status(job_id: str) -> dict:
         "done": job["done"],
         "total": job["total"],
         "elapsed_seconds": time.time() - job["started"],
+        "runs_ahead": _runs_ahead(job_id),
         "error": job["error"],
         "result": job["result"] if job["state"] == "done" else None,
     }
@@ -297,9 +343,9 @@ async def suggest_soc(
         validated = validate_uploaded_table(
             await _file_bytes(file), file.filename or "upload", parsed_mapping
         )
-        return suggest_cyclic_soc(
+        return await _in_turn(lambda: suggest_cyclic_soc(
             validated.timestamps, validated.demand, validated.supply, spec
-        )
+        ))
     except Exception as error:
         raise _error(error) from error
 
@@ -325,15 +371,16 @@ async def size(
             await _file_bytes(file), file.filename or "upload", parsed_mapping
         )
         duration = parsed_sizing.get("duration_hours")
-        return size_storage(
+        target = float(parsed_sizing.get("target_floor_gw", 0.0))
+        return await _in_turn(lambda: size_storage(
             validated.timestamps,
             validated.demand,
             validated.supply,
             spec,
             mode,
-            float(parsed_sizing.get("target_floor_gw", 0.0)),
+            target,
             float(duration) if duration not in (None, "") else None,
-        )
+        ))
     except Exception as error:
         raise _error(error) from error
 
