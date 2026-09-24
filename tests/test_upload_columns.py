@@ -76,7 +76,7 @@ SETTINGS = {"charge_power_gw": 2, "discharge_power_gw": 2, "energy_gwh": 8,
 
 def test_three_column_api_run_download_and_extra_column_parity():
     frame = month_frame()
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     files = {"file": ("february.csv", frame.to_csv(index=False).encode(), "text/csv")}
     validation = client.post("/api/validate", files=files)
     assert validation.status_code == 200
@@ -106,7 +106,7 @@ def test_three_column_api_run_download_and_extra_column_parity():
 def test_api_requires_initial_and_final_soc():
     frame = month_frame()
     settings = {key: value for key, value in SETTINGS.items() if key != "final_soc_percent"}
-    response = TestClient(app).post(
+    response = TestClient(app, base_url="http://127.0.0.1").post(
         "/api/optimize",
         files={"file": ("february.csv", frame.to_csv(index=False).encode(), "text/csv")},
         data={"settings": json.dumps(settings)},
@@ -118,6 +118,6 @@ def test_api_requires_initial_and_final_soc():
 def test_api_rejects_ambiguous_columns():
     frame = month_frame()
     frame["Supply (GW)"] = frame["Available Supply (GW)"]
-    response = TestClient(app).post("/api/validate", files={"file": ("ambiguous.csv", frame.to_csv(index=False).encode(), "text/csv")})
+    response = TestClient(app, base_url="http://127.0.0.1").post("/api/validate", files={"file": ("ambiguous.csv", frame.to_csv(index=False).encode(), "text/csv")})
     assert response.status_code == 400
     assert "Ambiguous" in response.json()["detail"]

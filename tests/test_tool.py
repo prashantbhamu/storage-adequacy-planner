@@ -104,7 +104,7 @@ def test_xlsx_api_workflow_and_download() -> None:
         }
     )
     xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     assert client.get("/api/health").json()["version"] == "3.0.0"
 
     preview = client.post("/api/preview", files={"file": ("february.xlsx", payload, xlsx)})
