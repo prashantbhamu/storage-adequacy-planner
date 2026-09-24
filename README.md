@@ -3,6 +3,11 @@
 A local, open-source decision-support tool for exploring how a single combined
 storage resource can reshape an hourly supply–demand residual profile.
 
+[![Watch the 2½-minute product tour](docs/tour-poster.jpg)](docs/tour.mp4)
+
+A 2½-minute tour of the tool, built on the synthetic example year:
+[docs/tour.mp4](docs/tour.mp4).
+
 ![Storage Adequacy Planner showing results for the example financial year](docs/interface.png)
 
 ## What it does
