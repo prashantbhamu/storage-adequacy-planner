@@ -12,7 +12,7 @@ export type Settings = Record<string, number | boolean>;
 async function json<T>(response: Response): Promise<T> {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail ?? `The local service returned ${response.status}.`);
+    throw new Error(payload.detail ?? `The service returned ${response.status}.`);
   }
   return payload as T;
 }

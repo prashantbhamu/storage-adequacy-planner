@@ -116,6 +116,7 @@ export type JobStatus = {
   done: number;
   total: number;
   elapsed_seconds: number;
+  runs_ahead?: number;
   error: string | null;
   result: RunResult | null;
 };

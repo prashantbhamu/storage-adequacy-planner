@@ -17,6 +17,7 @@ export function Progress({ status, periodLabel }: { status: JobStatus | null; pe
   }, 0);
   const elapsed = status?.elapsed_seconds ?? 0;
   const remaining = overall > 0.08 ? Math.max(0, elapsed / overall - elapsed) : null;
+  const ahead = status?.stage === "queued" ? status.runs_ahead ?? 0 : 0;
 
   return (
     <section className="progress-card" aria-live="polite" aria-label="Optimisation progress">
@@ -40,7 +41,9 @@ export function Progress({ status, periodLabel }: { status: JobStatus | null; pe
         })}
       </ol>
       <p className="progress-time">
-        {Math.round(elapsed)} s elapsed{remaining !== null ? ` · about ${Math.max(1, Math.round(remaining))} s left` : ""} · solved locally with HiGHS
+        {ahead > 0
+          ? `Waiting for ${ahead} other ${ahead === 1 ? "run" : "runs"} to finish, then yours starts`
+          : `${Math.round(elapsed)} s elapsed${remaining !== null ? ` · about ${Math.max(1, Math.round(remaining))} s left` : ""} · solved with HiGHS`}
       </p>
     </section>
   );

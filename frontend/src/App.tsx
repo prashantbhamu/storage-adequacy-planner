@@ -52,6 +52,7 @@ function useTheme() {
   return { choice, resolved, next };
 }
 
+const RUNS_LOCALLY = ["127.0.0.1", "localhost"].includes(window.location.hostname);
 const fileKey = (file: File | null) => (file ? `${file.name}:${file.size}:${file.lastModified}` : "");
 
 export default function App() {
@@ -204,7 +205,7 @@ export default function App() {
           <span className="brand-tag">hourly storage dispatch</span>
         </div>
         <div className="topbar-right">
-          <span className="engine">SciPy · HiGHS · local</span>
+          <span className="engine">SciPy · HiGHS · {RUNS_LOCALLY ? "local" : "hosted"}</span>
           <button type="button" className="icon-button" onClick={theme.next}
             aria-label={`Colour theme: ${theme.choice}. Change theme`} title={`Theme: ${theme.choice}`}>
             <ThemeIcon size={16} />
