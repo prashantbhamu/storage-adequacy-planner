@@ -43,7 +43,7 @@ export function Progress({ status, periodLabel }: { status: JobStatus | null; pe
       <p className="progress-time">
         {ahead > 0
           ? `Waiting for ${ahead} other ${ahead === 1 ? "run" : "runs"} to finish, then yours starts`
-          : `${Math.round(elapsed)} s elapsed${remaining !== null ? ` · about ${Math.max(1, Math.round(remaining))} s left` : ""} · solved with HiGHS`}
+          : `${Math.round(elapsed)} s elapsed${remaining !== null ? ` · about ${Math.max(1, Math.round(remaining))} s left` : ""} · solved locally with HiGHS`}
       </p>
     </section>
   );

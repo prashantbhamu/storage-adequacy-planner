@@ -7,6 +7,22 @@ A 2½-minute tour of the tool, built on the synthetic example year:
 
 https://github.com/user-attachments/assets/7ef1144f-e7b8-4a75-bdd9-fdc0f72540ff
 
+## Download for Windows
+
+No installation or programming needed:
+
+1. Download **[StorageAdequacyPlanner-windows.zip](https://github.com/prashantbhamu/storage-adequacy-planner/releases/latest/download/StorageAdequacyPlanner-windows.zip)** (about 65 MB).
+2. Right-click the zip → **Extract All…** → **Extract**.
+3. Open the extracted folder and double-click **Storage Adequacy Planner.exe**.
+   The planner opens in your browser. Keep the small black window open while
+   you use it; close it to stop the planner.
+
+**"Windows protected your PC"?** The app is not yet code-signed, so Windows
+warns about it the first time it runs. Click **More info**, then **Run anyway**.
+
+Everything runs on your own computer; uploaded files are not sent anywhere.
+Choose **or try the example year** to explore with synthetic data.
+
 ![Storage Adequacy Planner showing results for the example financial year](docs/interface.png)
 
 ## What it does
@@ -127,6 +143,20 @@ python start_tool.py
 
 Open `http://127.0.0.1:8765`. On Windows, `start_tool.bat` provides the same
 launcher after dependencies and the frontend build are available.
+
+### Build the Windows app
+
+The download is built by the **Windows app** GitHub workflow whenever a
+version tag (`v*`) is pushed; it packages the app with PyInstaller, checks it
+end to end with the example year and attaches the zip to that release. To
+build it by hand after building the frontend:
+
+```bash
+pip install pyinstaller
+pyinstaller packaging/windows/planner.spec
+```
+
+The app appears in `dist/Storage Adequacy Planner/`.
 
 ## Tests
 

@@ -27,3 +27,7 @@ tests/smoke*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Windows app build output
+/build/
+/dist/

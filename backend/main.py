@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import time
 import uuid
@@ -27,7 +28,8 @@ from .optimizer import (
 from .sizing import size_storage
 
 
-APP_ROOT = Path(__file__).resolve().parents[1]
+# In the packaged Windows app, bundled files live in PyInstaller's unpack folder.
+APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 DIST_DIR = APP_ROOT / "frontend" / "dist"
 EXAMPLE_FILE = APP_ROOT / "examples" / "synthetic_fy2029_30.csv"
 MAX_STORED_EXPORTS = 20
@@ -46,8 +48,8 @@ _exports: OrderedDict[str, tuple[str, bytes]] = OrderedDict()
 _jobs: OrderedDict[str, dict] = OrderedDict()
 _jobs_lock = threading.Lock()
 
-# One heavy calculation at a time. A hosted copy is shared, and a full-year run
-# keeps a CPU busy for tens of seconds; later requests wait their turn in order.
+# One heavy calculation at a time, off the request thread, so the interface stays
+# responsive while a full-year run keeps a CPU busy; later requests wait in order.
 _compute = threading.Lock()
 _queue: list[str] = []
 
