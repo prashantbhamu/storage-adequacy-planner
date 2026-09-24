@@ -47,6 +47,9 @@ def _key_values(sheet, row: int, rows: list[tuple], number_format: str = "0.000"
     for label, value, *unit in rows:
         _label(sheet.cell(row, 1), label)
         cell = sheet.cell(row, 2, value)
+        if isinstance(value, str):
+            # Values such as the uploaded file name stay text, never a formula.
+            cell.data_type = "s"
         if isinstance(value, float):
             cell.number_format = unit[1] if len(unit) > 1 else number_format
         if unit:

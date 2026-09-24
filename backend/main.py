@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .data_io import preview_table, validate_uploaded_table, validation_response
@@ -43,6 +43,28 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+DEV_ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"}
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+
+@app.middleware("http")
+async def local_requests_only(request, call_next):
+    """Serve only this computer's own pages.
+
+    The Host check defeats DNS rebinding (a website pointing its own name at
+    127.0.0.1 to read results); the Origin check stops other websites from
+    starting work here through the visitor's browser.
+    """
+    host = request.headers.get("host", "")
+    if host.rsplit(":", 1)[0] not in LOCAL_HOSTS:
+        return JSONResponse({"detail": "Only local requests are accepted."}, status_code=403)
+    origin = request.headers.get("origin")
+    if origin and origin not in {f"http://{host}"} | DEV_ORIGINS:
+        return JSONResponse({"detail": "Requests from other websites are not accepted."}, status_code=403)
+    return await call_next(request)
+
 
 _exports: OrderedDict[str, tuple[str, bytes]] = OrderedDict()
 _jobs: OrderedDict[str, dict] = OrderedDict()
@@ -88,11 +110,16 @@ def _in_turn(work):
 
 
 def _error(error: Exception) -> HTTPException:
+    if isinstance(error, HTTPException):
+        return error
     return HTTPException(status_code=400, detail=str(error))
 
 
 async def _file_bytes(file: UploadFile) -> bytes:
-    return await file.read()
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="The file is larger than 25 MB.")
+    return content
 
 
 def _spec_from_settings(settings: dict, sized: tuple[str, ...] = ()) -> StorageSpec:

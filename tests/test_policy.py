@@ -144,7 +144,7 @@ def test_sizing_reports_unreachable_targets(april):
 
 
 def test_suggest_and_size_endpoints():
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
     settings = {"charge_power_gw": 40, "discharge_power_gw": 40, "energy_gwh": 200,
                 "rte_percent": 85, "max_cycles_per_accounting_day": 1}
@@ -166,7 +166,7 @@ def test_suggest_and_size_endpoints():
 def test_background_job_reports_progress_and_result():
     import time
 
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
     settings = {"charge_power_gw": 40, "discharge_power_gw": 40, "energy_gwh": 200,
                 "rte_percent": 85, "max_cycles_per_accounting_day": 1,
@@ -190,12 +190,12 @@ def test_background_job_reports_progress_and_result():
 
 def test_background_job_rejects_bad_settings_immediately():
     files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
-    response = TestClient(app).post("/api/jobs", files=files, data={"settings": json.dumps({"energy_gwh": 1})})
+    response = TestClient(app, base_url="http://127.0.0.1").post("/api/jobs", files=files, data={"settings": json.dumps({"energy_gwh": 1})})
     assert response.status_code == 400
 
 
 def test_validation_reports_raw_gap_statistics(april):
-    response = TestClient(app).post("/api/validate", files={"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")})
+    response = TestClient(app, base_url="http://127.0.0.1").post("/api/validate", files={"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")})
     raw = response.json()["raw"]
     gap = april.supply - april.demand
     assert raw["minimum_gap_gw"] == pytest.approx(gap.min())
@@ -204,7 +204,7 @@ def test_validation_reports_raw_gap_statistics(april):
 
 
 def test_example_year_download_and_daily_preview():
-    client = TestClient(app)
+    client = TestClient(app, base_url="http://127.0.0.1")
     example = client.get("/api/example")
     assert example.status_code == 200
     assert example.content == (APP_ROOT / "examples/synthetic_fy2029_30.csv").read_bytes()
@@ -213,3 +213,47 @@ def test_example_year_download_and_daily_preview():
     assert validation["raw"]["shortage_hours"] > 1000
     days = validation["daily_minimum_gap_gw"]
     assert days[0]["day"] == "2029-03-31" and len(days) == 366
+
+
+def test_only_local_pages_can_use_the_service():
+    client = TestClient(app, base_url="http://127.0.0.1")
+    assert client.get("/api/health").status_code == 200
+    # DNS rebinding: another site's name pointed at this computer.
+    assert client.get("/api/health", headers={"host": "attacker.example"}).status_code == 403
+    # Another website posting through the visitor's browser.
+    files = {"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")}
+    foreign = client.post("/api/validate", files=files, headers={"origin": "https://attacker.example"})
+    assert foreign.status_code == 403
+    same = client.post("/api/validate", files=files, headers={"origin": "http://127.0.0.1"})
+    assert same.status_code == 200
+
+
+def test_oversized_uploads_are_refused(monkeypatch):
+    import backend.main as main
+
+    monkeypatch.setattr(main, "MAX_UPLOAD_BYTES", 1000)
+    response = TestClient(app, base_url="http://127.0.0.1").post(
+        "/api/validate", files={"file": (EXAMPLE.name, EXAMPLE.read_bytes(), "text/csv")})
+    assert response.status_code == 413
+
+
+def test_workbook_keeps_uploaded_names_as_text():
+    from io import BytesIO
+
+    import pandas as pd
+    from openpyxl import load_workbook
+
+    from backend.data_io import ValidatedInput
+    from backend.exporter import build_results_workbook
+
+    timestamps, demand, supply, spec = synthetic_run()
+    result = optimize_storage(timestamps, demand, supply, spec)
+    validated = ValidatedInput(
+        filename='=HYPERLINK("https://attacker.example","open").csv', sheet_name="=1+1",
+        period_type="month", period_label="Synthetic", timestamps=timestamps, demand=demand,
+        supply=supply, raw_frame=pd.DataFrame(), mapping={},
+    )
+    workbook = load_workbook(BytesIO(build_results_workbook(validated, spec, result)))
+    cells = [cell for sheet in workbook for row in sheet.iter_rows() for cell in row
+             if isinstance(cell.value, str) and ("HYPERLINK" in cell.value or cell.value == "=1+1")]
+    assert len(cells) == 2 and all(cell.data_type == "s" for cell in cells)
